@@ -1,0 +1,5 @@
+{
+  "name": "GGPH SMMS (Firebase)",
+  "description": "Sales and Marketing Management System refactored to use Google Firestore for real-time, asynchronous data persistence.",
+  "requestFramePermissions": []
+}
