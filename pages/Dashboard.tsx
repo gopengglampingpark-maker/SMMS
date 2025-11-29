@@ -322,3 +322,155 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                         className="w-full sm:w-auto bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm cursor-pointer min-w-[130px]"
                     />
                     <span className="text-slate-400 font-bold">-</span>
+                    <input 
+                        type="date" 
+                        value={endDate}
+                        onChange={(e) => handleDateChange(e, 'end')}
+                        onClick={handleSafePicker}
+                        className="w-full sm:w-auto bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm cursor-pointer min-w-[130px]"
+                    />
+                </div>
+            )}
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 z-10">
+        {kpis.map((kpi, idx) => {
+          const Icon = kpi.icon;
+          return (
+            <div 
+                key={idx} 
+                onClick={() => handleKpiClick(kpi)}
+                className={`bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-200 
+                   ${kpi.clickable ? 'cursor-pointer hover:shadow-md hover:border-emerald-200 active:scale-95' : 'hover:scale-105'}`}
+            >
+              <div className={`p-4 rounded-full ${kpi.bg}`}>
+                <Icon className={kpi.color} size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">{kpi.label}</p>
+                <h3 className="text-2xl font-bold text-slate-900 mt-1">{kpi.value}</h3>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 z-0">
+        
+        {/* Revenue vs Spend */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+          <div className="flex justify-between items-center mb-6">
+             <h3 className="text-lg font-semibold text-slate-800">Financial Performance</h3>
+             <span className="text-xs text-slate-400 font-medium bg-slate-100 px-2 py-1 rounded">Selected Range</span>
+          </div>
+          
+          {revenueData.length > 0 ? (
+            <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={revenueData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                    <Tooltip 
+                    formatter={(value: number) => `RM ${value.toLocaleString()}`}
+                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                    cursor={{fill: '#f1f5f9'}}
+                    />
+                    <Bar dataKey="spend" fill="#94a3b8" radius={[4, 4, 0, 0]} name="Spend (In Range)" />
+                    <Bar dataKey="revenue" fill="#059669" radius={[4, 4, 0, 0]} name="Total Revenue" />
+                </BarChart>
+                </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-slate-400 flex-col gap-2">
+                <Filter size={32} className="opacity-20"/>
+                <p>No campaigns found in selected range</p>
+            </div>
+          )}
+        </div>
+
+        {/* Platform Distribution */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+          <h3 className="text-lg font-semibold text-slate-800 mb-6">Marketing Channels (In Range)</h3>
+          {platformData.length > 0 ? (
+              <>
+                <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                        data={platformData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                        >
+                        {platformData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                        </Pie>
+                        <Tooltip />
+                    </PieChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap justify-center gap-4 mt-4">
+                    {platformData.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{backgroundColor: COLORS[index % COLORS.length]}}></div>
+                        <span className="text-xs text-slate-600 font-medium">{entry.name}</span>
+                    </div>
+                    ))}
+                </div>
+             </>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-slate-400 flex-col gap-2">
+                <Calendar size={32} className="opacity-20"/>
+                <p>No plans scheduled in selected range</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* KPI Details Modal */}
+      {kpiModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fadeIn flex flex-col max-h-[80vh]">
+                  <div className="bg-slate-900 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                      <h3 className="text-lg font-bold text-white">{kpiModal.title}</h3>
+                      <button onClick={() => setKpiModal(null)} className="text-slate-400 hover:text-white"><X size={20}/></button>
+                  </div>
+                  <div className="overflow-y-auto p-4 space-y-3">
+                      {kpiModal.items.map((item, i) => (
+                          <div 
+                            key={i} 
+                            onClick={() => handleNavigateToPlan(item.campaignId)}
+                            className="p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer group flex justify-between items-center"
+                          >
+                              <div>
+                                  <p className="font-semibold text-slate-800">{item.plan.title}</p>
+                                  <p className="text-xs text-slate-500">{item.campaignName} • {item.plan.scheduledDate}</p>
+                              </div>
+                              <div className="text-right flex items-center gap-3">
+                                  <div>
+                                      <span className="block text-[10px] text-slate-400 uppercase">Cost</span>
+                                      <span className="font-bold text-slate-700">RM {item.plan.cost.toLocaleString()}</span>
+                                  </div>
+                                  <ArrowRight size={16} className="text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
+    </div>
+  );
+};
+
+export default Dashboard;
