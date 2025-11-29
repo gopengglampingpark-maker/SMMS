@@ -4,7 +4,7 @@ import {
   updateCampaignStatus, addMarketingPlan, addCampaign, updateCampaign, updateMarketingPlan, deleteCampaign, deleteMarketingPlan 
 } from '../services/storage';
 import { Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventType } from '../types';
-import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Tag, CheckSquare, CalendarDays, Trash2, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Tag, CheckSquare, CalendarDays, Trash2 } from 'lucide-react';
 import { 
   parseISO, 
   isValid, 
