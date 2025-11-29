@@ -8,8 +8,9 @@ import { User, Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventT
 // --- Safe Env Access (Vite Compatible) ---
 const getEnv = (key: string) => {
   // Check for Vite environment variables
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env[key];
+  // FIX: Cast to 'any' to avoid TS2339 error
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+    return (import.meta as any).env[key];
   }
   // Fallback for other environments
   try {
@@ -213,7 +214,7 @@ export const getUsers = async (): Promise<User[]> => {
 
 export const addUser = async (user: Omit<User, 'id'>): Promise<User> => {
   if (IS_DEMO) { 
-    await delay(300); 
+    await delay(300);
     const users = getMockData<User>(COLLECTIONS.USERS);
     const newUser = { id: Date.now().toString(), ...user };
     setMockData(COLLECTIONS.USERS, [...users, newUser]);

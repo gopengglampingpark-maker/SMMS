@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
-
-// Fix date-fns imports: using direct named imports to avoid issues with modern bundlers and v3
 import { 
   format, 
   startOfMonth, 
   endOfMonth, 
   eachDayOfInterval, 
-  isSameMonth, 
   isSameDay, 
   addMonths, 
   subMonths, 
@@ -22,8 +19,7 @@ import {
   endOfYear, 
   isSameYear 
 } from 'date-fns';
-
-import { ChevronLeft, ChevronRight, X, Calendar as CalIcon, MapPin, ArrowRight, List, LayoutGrid, Filter, Circle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalIcon, ArrowRight, List, LayoutGrid, Filter, Circle } from 'lucide-react';
 import { getCampaigns, getBranches } from '../services/storage';
 import { Campaign, Branch, MarketingPlan } from '../types';
 
@@ -33,7 +29,7 @@ interface CalendarViewProps {
 
 const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
   // Fix: Initialize to current date so it opens on relevant year, not hardcoded 2024
-  const [currentDate, setCurrentDate] = useState(new Date()); 
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
@@ -213,6 +209,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
   // Generate Year Options (current year +/- 5)
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 11}, (_, i) => currentYear - 5 + i);
+
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June', 
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -257,7 +254,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
                             onChange={handleMonthChange}
                             className="appearance-none bg-transparent font-semibold text-slate-700 text-sm py-1 px-1 cursor-pointer hover:text-emerald-600 focus:outline-none"
                         >
-                            {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                          {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
                         </select>
                     </div>
                 </>
@@ -326,7 +323,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
                 const activeCampaigns = getActiveCampaignsForDay(day);
                 const plans = getPlansForDay(day);
                 const isToday = isSameDay(day, new Date());
-                
+
                 return (
                   <div 
                     key={day.toString()} 
@@ -401,7 +398,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
                       <div className="flex-1 min-w-0">
                          <div className="flex items-center gap-2 mb-1">
                             <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
-                                evt.type === 'campaign' 
+                                  evt.type === 'campaign' 
                                   ? 'bg-purple-50 text-purple-700 border-purple-200' 
                                   : 'bg-slate-50 text-slate-700 border-slate-200'
                             }`}>
@@ -475,7 +472,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
                    </div>
                 </div>
               ) : (
-                <div className="space-y-3">
+                 <div className="space-y-3">
                    <h4 className="font-bold text-slate-800">{selectedEvent.data.plan.title}</h4>
                    <div className="flex items-center gap-2">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getPlanStyles(selectedEvent.data.plan.status).split(' ').slice(0,2).join(' ')}`}>
@@ -493,7 +490,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
 
                    <div className="flex flex-wrap gap-2">
                       {selectedEvent.data.plan.platform.map((p: string) => (
-                         <span key={p} className="text-xs px-2 py-1 bg-slate-50 border rounded shadow-sm">{p}</span>
+                          <span key={p} className="text-xs px-2 py-1 bg-slate-50 border rounded shadow-sm">{p}</span>
                       ))}
                    </div>
                    <div className="pt-2">
@@ -508,7 +505,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
                     onClick={handleNavigateToEvent}
                     className="w-full flex justify-center items-center gap-2 bg-slate-900 text-white py-2 rounded-lg text-sm hover:bg-slate-800 transition-colors"
                 >
-                    View in Campaign Manager <ArrowRight size={14} />
+                     View in Campaign Manager <ArrowRight size={14} />
                 </button>
               </div>
            </div>

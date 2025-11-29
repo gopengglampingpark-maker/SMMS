@@ -4,8 +4,7 @@ import {
   updateCampaignStatus, addMarketingPlan, addCampaign, updateCampaign, updateMarketingPlan 
 } from '../services/storage';
 import { Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventType } from '../types';
-import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Trash, Tag, CheckSquare, CalendarDays, Filter } from 'lucide-react';
-
+import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Tag, CheckSquare, CalendarDays } from 'lucide-react';
 import { 
   parseISO, 
   isValid, 
@@ -33,7 +32,7 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   // Date Filter States (Default to Current Year)
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Refs for scrolling
@@ -59,7 +58,7 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   const [showPlanModal, setShowPlanModal] = useState<string | null>(null); // holds campaign ID
   const [isEditPlan, setIsEditPlan] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
-
+  
   const [planTitle, setPlanTitle] = useState('');
   const [planDesc, setPlanDesc] = useState(''); // New State
   const [planPlatforms, setPlanPlatforms] = useState<string[]>([]);
@@ -129,7 +128,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     const statuses: MarketingPlan['status'][] = ['Draft', 'Scheduled', 'Published', 'Cancelled'];
     const nextIndex = (statuses.indexOf(plan.status) + 1) % statuses.length;
     const nextStatus = statuses[nextIndex];
-    
     await updateMarketingPlan(campaignId, {
         ...plan,
         status: nextStatus
@@ -215,7 +213,8 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   };
 
   const resetCampForm = () => {
-    setCampName(''); setCampStart(''); setCampEnd(''); setCampTarget(''); 
+    setCampName(''); setCampStart(''); setCampEnd('');
+    setCampTarget(''); 
     setCampActualRev('0'); setCampDesc(''); setCampImage(''); setCampBranch('');
     setCampCategory(''); setCampEvent('');
     setEditingCampId(null);
@@ -293,7 +292,8 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
 
   const resetPlanForm = () => {
     setPlanTitle(''); setPlanDesc(''); setPlanPlatforms([]); setPlanCustomPlatform('');
-    setPlanDate(''); setPlanBudget(''); setPlanCost(''); setPlanStatus('Draft');
+    setPlanDate(''); setPlanBudget(''); setPlanCost('');
+    setPlanStatus('Draft');
     setEditingPlanId(null);
   };
 
@@ -350,13 +350,13 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
 
     // Check overlap: (StartA <= EndB) and (EndA >= StartB)
     const dateMatch = cStart <= filterEnd && cEnd >= filterStart;
-
     return branchMatch && categoryMatch && dateMatch;
   });
 
   // Generate Year Options (Current +/- 2 years)
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
+
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June', 
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -376,13 +376,13 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
         </div>
         
         <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-            {/* Year Filter */}
+          {/* Year Filter */}
             <div className="relative">
                 <select 
                 className={`${inputClass} w-full sm:w-auto font-medium`}
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                >
+            >
                 <option value="all">All Years</option>
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
@@ -395,7 +395,7 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 disabled={selectedYear === 'all'}
-                >
+            >
                 <option value="all">All Months</option>
                 {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
                 </select>
@@ -443,9 +443,10 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
         {filteredCampaigns.map((campaign) => {
           const totalBudget = (campaign.plans || []).reduce((acc, p) => acc + (p.budget || 0), 0);
           const totalActualCost = (campaign.plans || []).reduce((acc, p) => acc + (p.cost || 0), 0);
+
           const catName = categories.find(c => c.id === campaign.categoryId)?.name;
           const evtName = eventTypes.find(e => e.id === campaign.eventTypeId)?.name;
-          
+
           return (
             <div 
                 key={campaign.id} 
@@ -512,7 +513,8 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                         >
                             <Pencil size={18} />
                         </button>
-                       {expandedId === campaign.id ? <ChevronUp className="text-slate-400" /> : <ChevronDown className="text-slate-400" />}
+          
+                        {expandedId === campaign.id ? <ChevronUp className="text-slate-400" /> : <ChevronDown className="text-slate-400" />}
                    </div>
                 </div>
               </div>
@@ -550,9 +552,9 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                         <div className="grid grid-cols-1 gap-3">
                           {campaign.plans.map(plan => (
                             <div key={plan.id} className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:shadow-sm transition-shadow">
-                               <div className="flex items-center gap-3">
+                                 <div className="flex items-center gap-3">
                                   <div className="flex -space-x-1">
-                                      {plan.platform.map((plat, idx) => (
+                                    {plan.platform.map((plat, idx) => (
                                           <div key={idx} className="w-8 h-8 rounded-full bg-slate-100 border border-white flex items-center justify-center text-slate-500 relative z-10">
                                               {getPlatformIcon(plat)}
                                           </div>
@@ -563,11 +565,13 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                                      <p className="text-xs text-slate-500">{plan.scheduledDate}</p>
                                   </div>
                                </div>
+  
                                <div className="flex items-center gap-4">
                                    <div className="text-right">
                                         <div className="text-[10px] text-slate-400">Budget / Actual</div>
                                         <span className="block text-xs font-bold text-slate-700">RM {plan.budget} / {plan.cost}</span>
                                    </div>
+      
                                    <div className="text-right">
                                         <div className="text-[10px] text-slate-400">Status</div>
                                         <button 
@@ -654,161 +658,4 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                 </div>
 
                 {/* Financials Row */}
-                <div className="col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Target Revenue (RM)</label>
-                        <input type="number" required value={campTarget} onChange={e => setCampTarget(e.target.value)} className={inputClass} placeholder="0.00" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Actual Revenue (RM)</label>
-                        <input type="number" value={campActualRev} onChange={e => setCampActualRev(e.target.value)} className={`${inputClass} border-emerald-200`} placeholder="0.00" />
-                    </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
-                  <input type="date" required value={campStart} onChange={e => setCampStart(e.target.value)} className={inputClass} />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
-                  <input type="date" required value={campEnd} onChange={e => setCampEnd(e.target.value)} className={inputClass} />
-                </div>
-                
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                  <textarea rows={2} value={campDesc} onChange={e => setCampDesc(e.target.value)} className={inputClass} placeholder="Describe the campaign..." />
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Upload Poster (Image)</label>
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
-                  {campImage && <div className="mt-2 text-xs text-green-600 flex items-center gap-1"><CheckSquare size={12}/> Image loaded</div>}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="button" onClick={() => setShowCampModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">{isEditCamp ? 'Save Changes' : 'Create Campaign'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Plan Modal (New & Edit) */}
-      {showPlanModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
-             <div className="bg-slate-900 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-               <h3 className="text-lg font-bold text-white">{isEditPlan ? 'Edit Marketing Plan' : 'Add Marketing Plan'}</h3>
-               <button onClick={() => setShowPlanModal(null)} className="text-slate-400 hover:text-white"><X size={20}/></button>
-             </div>
-             
-             <form onSubmit={handleSavePlan} className="p-6 space-y-4 overflow-y-auto">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Plan Title</label>
-                  <input type="text" required value={planTitle} onChange={e => setPlanTitle(e.target.value)} className={inputClass} placeholder="e.g. Teaser Post" />
-                </div>
-                
-                {/* Multi-Platform Select */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Platforms</label>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                      {COMMON_PLATFORMS.map(p => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => togglePlatform(p)}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                                planPlatforms.includes(p) 
-                                ? 'bg-emerald-600 text-white border-emerald-600' 
-                                : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400'
-                            }`}
-                          >
-                              {p}
-                          </button>
-                      ))}
-                  </div>
-                  {/* Custom Platform */}
-                  <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        value={planCustomPlatform} 
-                        onChange={e => setPlanCustomPlatform(e.target.value)} 
-                        placeholder="Add other..." 
-                        className="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg bg-white text-slate-900"
-                      />
-                      <button 
-                        type="button" 
-                        onClick={addCustomPlatform}
-                        className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
-                      >
-                          Add
-                      </button>
-                  </div>
-                  {/* Selected Chips */}
-                  {planPlatforms.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
-                          {planPlatforms.map(p => (
-                              <span key={p} className="text-xs flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded text-slate-700">
-                                  {p} <X size={10} className="cursor-pointer hover:text-red-500" onClick={() => togglePlatform(p)}/>
-                              </span>
-                          ))}
-                      </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Scheduled Date</label>
-                  <input type="date" required value={planDate} onChange={e => setPlanDate(e.target.value)} className={inputClass} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Budget (RM)</label>
-                        <input type="number" required value={planBudget} onChange={e => setPlanBudget(e.target.value)} className={inputClass} placeholder="0.00" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Actual Cost (RM)</label>
-                        <input type="number" required value={planCost} onChange={e => setPlanCost(e.target.value)} className={inputClass} placeholder="0.00" />
-                    </div>
-                </div>
-
-                {/* Description Input */}
-                <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Description / Notes</label>
-                   <textarea 
-                     rows={3} 
-                     value={planDesc} 
-                     onChange={e => setPlanDesc(e.target.value)} 
-                     className={inputClass} 
-                     placeholder="Add details, caption ideas, or notes..." 
-                   />
-                </div>
-
-                {isEditPlan && (
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                        <select value={planStatus} onChange={e => setPlanStatus(e.target.value as any)} className={inputClass}>
-                            <option value="Draft">Draft</option>
-                            <option value="Scheduled">Scheduled</option>
-                            <option value="Published">Published</option>
-                            <option value="Cancelled">Cancelled</option>
-                        </select>
-                    </div>
-                )}
-
-                <div className="flex justify-end gap-2 mt-6 pt-2 border-t">
-                   <button type="button" onClick={() => setShowPlanModal(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg">Cancel</button>
-                   <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">{isEditPlan ? 'Save Changes' : 'Add Plan'}</button>
-                </div>
-             </form>
-           </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default Campaigns;
+                <div className="col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border

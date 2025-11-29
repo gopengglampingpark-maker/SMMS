@@ -1,0 +1,3347 @@
+---------------------------------
+FILE NAME: Layout.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\components\Layout.tsx
+---------------------------------
+import React, { useState } from 'react';
+import { 
+  LayoutDashboard, 
+  Megaphone, 
+  Calendar, 
+  Settings, 
+  LogOut, 
+  Menu, 
+  X,
+  User as UserIcon
+} from 'lucide-react';
+import { User } from '../types';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  user: User;
+  currentView: string;
+  onNavigate: (view: string, data?: any) => void;
+  onLogout: () => void;
+}
+
+const Layout: React.FC<LayoutProps> = ({ children, user, currentView, onNavigate, onLogout }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
+  ];
+
+  if (user.role === 'Admin') {
+    navItems.push({ id: 'admin', label: 'Admin Panel', icon: Settings });
+  }
+
+  const handleNav = (view: string) => {
+    onNavigate(view);
+    setMobileMenuOpen(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-800">
+      
+      {/* Mobile Header */}
+      <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center z-50 shadow-md">
+        <div className="font-bold text-xl tracking-tight flex items-center gap-2">
+          <span className="text-emerald-500">GGPH</span> SMMS
+        </div>
+        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X /> : <Menu />}
+        </button>
+      </div>
+
+      {/* Sidebar */}
+      <aside className={`
+        fixed inset-y-0 left-0 w-64 bg-slate-900 text-slate-300 transform transition-transform duration-300 ease-in-out z-40
+        md:relative md:translate-x-0
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="p-6 border-b border-slate-800 hidden md:block">
+          <div className="font-bold text-2xl tracking-tight text-white">
+            <span className="text-emerald-500">GGPH</span> SMMS
+          </div>
+          <div className="text-xs text-slate-500 mt-1 uppercase tracking-wider">Gopeng Glamping Park</div>
+        </div>
+
+        <nav className="p-4 space-y-2 mt-4">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentView === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNav(item.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
+                  ${isActive 
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50' 
+                    : 'hover:bg-slate-800 hover:text-white'
+                  }`}
+              >
+                <Icon size={20} />
+                <span className="font-medium">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-slate-950 border-t border-slate-800">
+          <div className="flex items-center gap-3 mb-4 px-2">
+            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-emerald-500">
+              <UserIcon size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">{user.name}</p>
+              <p className="text-xs text-slate-500 truncate">{user.role}</p>
+            </div>
+          </div>
+          <button 
+            onClick={onLogout}
+            className="w-full flex items-center gap-2 text-slate-400 hover:text-red-400 px-2 py-2 text-sm transition-colors"
+          >
+            <LogOut size={16} />
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto h-[calc(100vh-64px)] md:h-screen bg-slate-50">
+        <div className="p-4 md:p-8 max-w-7xl mx-auto">
+          {children}
+        </div>
+      </main>
+
+      {/* Overlay for mobile sidebar */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+export default Layout;
+
+
+---------------------------------
+FILE NAME: Admin.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\pages\Admin.tsx
+---------------------------------
+import React, { useState, useEffect } from 'react';
+import { 
+  getUsers, addUser, updateUser, deleteUser, 
+  getBranches, addBranch, updateBranch,
+  getCategories, addCategory, updateCategory, deleteCategory,
+  getEventTypes, addEventType, updateEventType, deleteEventType
+} from '../services/storage';
+import { User, Role, Branch, Category, EventType } from '../types';
+import { Trash2, Shield, User as UserIcon, MapPin, Plus, Tag, CalendarDays, Pencil } from 'lucide-react';
+
+const Admin: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'users' | 'branches' | 'categories' | 'events'>('users');
+  const [users, setUsers] = useState<User[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [events, setEvents] = useState<EventType[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Edit State
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // New User Form
+  const [newName, setNewName] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<Role>('Staff');
+
+  // New Branch Form
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchLoc, setNewBranchLoc] = useState('');
+
+  // New Category/Event Form
+  const [newSimpleName, setNewSimpleName] = useState('');
+
+  // Input Class for consistent styling (White background, dark text)
+  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none placeholder-slate-400";
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+        const [u, b, c, e] = await Promise.all([
+            getUsers(),
+            getBranches(),
+            getCategories(),
+            getEventTypes()
+        ]);
+        setUsers(u);
+        setBranches(b);
+        setCategories(c);
+        setEvents(e);
+    } catch (error) {
+        console.error("Failed to load admin data", error);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (confirm('Are you sure you want to delete this user?')) {
+      await deleteUser(id);
+      loadData();
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (confirm('Delete this category?')) {
+      await deleteCategory(id);
+      loadData();
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (confirm('Delete this event type?')) {
+      await deleteEventType(id);
+      loadData();
+    }
+  };
+
+  // --- Handlers for User ---
+  const openNewUserModal = () => {
+      resetForms();
+      setIsModalOpen(true);
+  };
+
+  const openEditUserModal = (user: User) => {
+      setNewName(user.name);
+      setNewUsername(user.username);
+      setNewPassword(user.password || ''); // Often passwords aren't returned, but here we mock it
+      setNewRole(user.role);
+      setEditingId(user.id);
+      setIsModalOpen(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName || !newUsername) return;
+    setIsSubmitting(true);
+    
+    if (editingId) {
+        await updateUser({ id: editingId, name: newName, username: newUsername, password: newPassword, role: newRole });
+    } else {
+        if(!newPassword) { setIsSubmitting(false); return; } // Password required for new
+        await addUser({ name: newName, username: newUsername, password: newPassword, role: newRole });
+    }
+    
+    resetForms();
+    setIsSubmitting(false);
+  };
+
+  // --- Handlers for Branch ---
+  const openNewBranchModal = () => {
+    resetForms();
+    setIsModalOpen(true);
+  };
+
+  const openEditBranchModal = (branch: Branch) => {
+    setNewBranchName(branch.name);
+    setNewBranchLoc(branch.location);
+    setEditingId(branch.id);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBranchName || !newBranchLoc) return;
+    setIsSubmitting(true);
+
+    if (editingId) {
+        await updateBranch({ id: editingId, name: newBranchName, location: newBranchLoc });
+    } else {
+        await addBranch({ name: newBranchName, location: newBranchLoc });
+    }
+
+    resetForms();
+    setIsSubmitting(false);
+  };
+
+  // --- Handlers for Category/Event ---
+  const openNewSimpleModal = () => {
+      resetForms();
+      setIsModalOpen(true);
+  };
+
+  const openEditCategoryModal = (cat: Category) => {
+      setNewSimpleName(cat.name);
+      setEditingId(cat.id);
+      setIsModalOpen(true);
+  };
+
+  const openEditEventModal = (evt: EventType) => {
+      setNewSimpleName(evt.name);
+      setEditingId(evt.id);
+      setIsModalOpen(true);
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSimpleName) return;
+    setIsSubmitting(true);
+    
+    if (editingId) {
+        await updateCategory({ id: editingId, name: newSimpleName });
+    } else {
+        await addCategory(newSimpleName);
+    }
+    
+    resetForms();
+    setIsSubmitting(false);
+  };
+
+  const handleSaveEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSimpleName) return;
+    setIsSubmitting(true);
+    
+    if (editingId) {
+        await updateEventType({ id: editingId, name: newSimpleName });
+    } else {
+        await addEventType(newSimpleName);
+    }
+
+    resetForms();
+    setIsSubmitting(false);
+  };
+
+
+  const resetForms = () => {
+    setNewName(''); setNewUsername(''); setNewPassword(''); setNewRole('Staff');
+    setNewBranchName(''); setNewBranchLoc('');
+    setNewSimpleName('');
+    setEditingId(null);
+    setIsModalOpen(false);
+    loadData();
+  };
+
+  const getModalTitle = () => {
+    const prefix = editingId ? 'Edit' : 'Add';
+    switch(activeTab) {
+      case 'users': return `${prefix} User`;
+      case 'branches': return `${prefix} Branch`;
+      case 'categories': return `${prefix} Category`;
+      case 'events': return `${prefix} Event Type`;
+    }
+  };
+
+  const handleOpenModal = () => {
+      if (activeTab === 'users') openNewUserModal();
+      else if (activeTab === 'branches') openNewBranchModal();
+      else openNewSimpleModal();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+           <h2 className="text-2xl font-bold text-slate-800">Admin Panel</h2>
+           <p className="text-slate-500 text-sm">System configuration & management</p>
+        </div>
+        
+        {/* Tab Switcher */}
+        <div className="bg-white border border-slate-200 p-1 rounded-lg flex flex-wrap gap-1">
+          {[
+            { id: 'users', label: 'Users' },
+            { id: 'branches', label: 'Branches' },
+            { id: 'categories', label: 'Categories' },
+            { id: 'events', label: 'Event Types' },
+          ].map(tab => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${activeTab === tab.id ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button 
+          onClick={handleOpenModal}
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+        >
+          <Plus size={18} />
+          {activeTab === 'users' ? 'Add User' : activeTab === 'branches' ? 'Add Branch' : activeTab === 'categories' ? 'Add Category' : 'Add Event Type'}
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative min-h-[300px]">
+        {isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+                <div className="loader"></div>
+            </div>
+        ) : (
+            <>
+                {activeTab === 'users' && (
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
+                        <th className="p-4">User</th>
+                        <th className="p-4">Username</th>
+                        <th className="p-4">Role</th>
+                        <th className="p-4 text-right">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                    {users.map(user => (
+                        <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4">
+                            <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                                <UserIcon size={16} />
+                            </div>
+                            <span className="font-medium text-slate-800">{user.name}</span>
+                            </div>
+                        </td>
+                        <td className="p-4 text-slate-600 font-mono text-sm">{user.username}</td>
+                        <td className="p-4">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                            user.role === 'Admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}>
+                            {user.role === 'Admin' && <Shield size={10} />}
+                            {user.role}
+                            </span>
+                        </td>
+                        <td className="p-4 text-right flex justify-end gap-2">
+                            <button onClick={() => openEditUserModal(user)} className="text-slate-400 hover:text-blue-500 p-2"><Pencil size={18} /></button>
+                            <button onClick={() => handleDeleteUser(user.id)} className="text-slate-400 hover:text-red-500 p-2"><Trash2 size={18} /></button>
+                        </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+                )}
+
+                {activeTab === 'branches' && (
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
+                        <th className="p-4">Branch Name</th>
+                        <th className="p-4">Location</th>
+                        <th className="p-4">ID</th>
+                        <th className="p-4 text-right">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                    {branches.map(branch => (
+                        <tr key={branch.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 font-medium text-slate-800">{branch.name}</td>
+                        <td className="p-4 text-slate-600 flex items-center gap-2"><MapPin size={16}/> {branch.location}</td>
+                        <td className="p-4 text-slate-400 font-mono text-xs">{branch.id}</td>
+                        <td className="p-4 text-right flex justify-end gap-2">
+                             <button onClick={() => openEditBranchModal(branch)} className="text-slate-400 hover:text-blue-500 p-2"><Pencil size={18} /></button>
+                        </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+                )}
+
+                {(activeTab === 'categories' || activeTab === 'events') && (
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
+                        <th className="p-4">Name</th>
+                        <th className="p-4">ID</th>
+                        <th className="p-4 text-right">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                    {(activeTab === 'categories' ? categories : events).map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 font-medium text-slate-800 flex items-center gap-3">
+                            {activeTab === 'categories' ? <Tag size={16} className="text-purple-500"/> : <CalendarDays size={16} className="text-blue-500"/>}
+                            {item.name}
+                        </td>
+                        <td className="p-4 text-slate-400 font-mono text-xs">{item.id}</td>
+                        <td className="p-4 text-right flex justify-end gap-2">
+                            <button 
+                                onClick={() => activeTab === 'categories' ? openEditCategoryModal(item) : openEditEventModal(item)} 
+                                className="text-slate-400 hover:text-blue-500 p-2"
+                            >
+                                <Pencil size={18} />
+                            </button>
+                            <button 
+                                onClick={() => activeTab === 'categories' ? handleDeleteCategory(item.id) : handleDeleteEvent(item.id)} 
+                                className="text-slate-400 hover:text-red-500 p-2"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+                )}
+            </>
+        )}
+      </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fadeIn">
+            <div className="bg-slate-900 px-6 py-4 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white">{getModalTitle()}</h3>
+            </div>
+            
+            <form onSubmit={
+                activeTab === 'users' ? handleSaveUser : 
+                activeTab === 'branches' ? handleSaveBranch :
+                activeTab === 'categories' ? handleSaveCategory : handleSaveEvent
+            } className="p-6 space-y-4">
+              
+              {activeTab === 'users' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                    <input type="text" required value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                    <input type="text" required value={newUsername} onChange={e => setNewUsername(e.target.value)} className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" required={!editingId} value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder={editingId ? "Leave blank to keep unchanged" : ""} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                    <select value={newRole} onChange={e => setNewRole(e.target.value as Role)} className={inputClass}>
+                      <option value="Staff">Staff</option>
+                      <option value="Admin">Admin</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'branches' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Branch Name</label>
+                    <input type="text" required value={newBranchName} onChange={e => setNewBranchName(e.target.value)} className={inputClass} placeholder="e.g. Gopeng Resort" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
+                    <input type="text" required value={newBranchLoc} onChange={e => setNewBranchLoc(e.target.value)} className={inputClass} placeholder="e.g. Perak" />
+                  </div>
+                </>
+              )}
+
+              {(activeTab === 'categories' || activeTab === 'events') && (
+                <div>
+                   <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                   <input type="text" required value={newSimpleName} onChange={e => setNewSimpleName(e.target.value)} className={inputClass} placeholder="e.g. Summer Promo" />
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6 pt-2">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                    {isSubmitting ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Admin;
+
+
+---------------------------------
+FILE NAME: Calendar.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\pages\Calendar.tsx
+---------------------------------
+import React, { useState, useEffect } from 'react';
+
+// Fix date-fns imports: using direct named imports to avoid issues with modern bundlers and v3
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  eachDayOfInterval, 
+  isSameMonth, 
+  isSameDay, 
+  addMonths, 
+  subMonths, 
+  parseISO, 
+  isWithinInterval, 
+  endOfDay, 
+  startOfDay, 
+  setMonth, 
+  setYear, 
+  compareAsc, 
+  isValid, 
+  startOfYear, 
+  endOfYear, 
+  isSameYear 
+} from 'date-fns';
+
+import { ChevronLeft, ChevronRight, X, Calendar as CalIcon, MapPin, ArrowRight, List, LayoutGrid, Filter, Circle } from 'lucide-react';
+import { getCampaigns, getBranches } from '../services/storage';
+import { Campaign, Branch, MarketingPlan } from '../types';
+
+interface CalendarViewProps {
+  onNavigate: (view: string, data?: any) => void;
+}
+
+const CalendarView: React.FC<CalendarViewProps> = ({ onNavigate }) => {
+  // Fix: Initialize to current date so it opens on relevant year, not hardcoded 2024
+  const [currentDate, setCurrentDate] = useState(new Date()); 
+  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<{type: 'campaign' | 'plan', data: any, campaignId: string} | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+        try {
+            const [b, c] = await Promise.all([getBranches(), getCampaigns()]);
+            setBranches(b);
+            setCampaigns(c);
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    fetchData();
+  }, []);
+
+  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  const goToToday = () => setCurrentDate(new Date());
+
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCurrentDate(setMonth(currentDate, parseInt(e.target.value)));
+  };
+
+  const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCurrentDate(setYear(currentDate, parseInt(e.target.value)));
+  };
+
+  const filteredCampaigns = selectedBranch === 'all' 
+    ? campaigns 
+    : campaigns.filter(c => c.branchId === selectedBranch);
+
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+  // --- Style Helpers ---
+
+  const getCampaignStyles = (status: string) => {
+    switch (status) {
+      case 'Active': return 'bg-emerald-200 text-emerald-900 border-l-2 border-emerald-600';
+      case 'Planning': return 'bg-blue-200 text-blue-900 border-l-2 border-blue-600';
+      case 'Completed': return 'bg-slate-200 text-slate-700 border-l-2 border-slate-500';
+      case 'On Hold': return 'bg-orange-100 text-orange-900 border-l-2 border-orange-500';
+      case 'Cancelled': return 'bg-red-100 text-red-900 border-l-2 border-red-600';
+      default: return 'bg-slate-100 text-slate-900';
+    }
+  };
+
+  const getPlanStyles = (status: string) => {
+    switch (status) {
+      case 'Published': return 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100';
+      case 'Scheduled': return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
+      case 'Draft': return 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100';
+      case 'Cancelled': return 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100';
+      default: return 'bg-white text-slate-600 border-slate-200';
+    }
+  };
+
+  // --- Grid View Helpers ---
+
+  // Helper to check if a day is part of a campaign
+  const getActiveCampaignsForDay = (day: Date) => {
+    return filteredCampaigns.filter(c => {
+        if (!c.startDate || !c.endDate) return false;
+        try {
+            const start = startOfDay(parseISO(c.startDate));
+            const end = endOfDay(parseISO(c.endDate));
+            if (!isValid(start) || !isValid(end)) return false;
+            return isWithinInterval(day, { start, end });
+        } catch (e) {
+            return false;
+        }
+    });
+  };
+
+  // Helper to get plans for a day
+  const getPlansForDay = (day: Date) => {
+    const plans: { plan: MarketingPlan, campaignName: string, campaignId: string }[] = [];
+    filteredCampaigns.forEach(c => {
+      if(c.plans) {
+        c.plans.forEach(p => {
+            if (p.scheduledDate && isSameDay(parseISO(p.scheduledDate), day)) {
+            plans.push({ plan: p, campaignName: c.name, campaignId: c.id });
+            }
+        });
+      }
+    });
+    return plans;
+  };
+
+  // --- List View Helpers (Whole Year) ---
+  
+  const getYearEvents = () => {
+    const events: Array<{
+      date: Date,
+      type: 'campaign' | 'plan',
+      title: string,
+      subtitle: string,
+      status: string,
+      id: string,
+      originalData: any,
+      campaignId: string
+    }> = [];
+
+    const yearStart = startOfYear(currentDate);
+    const yearEnd = endOfYear(currentDate);
+
+    // 1. Add Campaigns active in this year
+    filteredCampaigns.forEach(c => {
+      if (!c.startDate || !c.endDate) return;
+      try {
+          const start = parseISO(c.startDate);
+          const end = parseISO(c.endDate);
+          
+          // Check overlap with the current year
+          if (start <= yearEnd && end >= yearStart) {
+            // If the campaign started before this year, list it as starting Jan 1st for sorting purposes, 
+            // otherwise use actual start date
+            const sortDate = start < yearStart ? yearStart : start;
+
+            events.push({
+              date: sortDate,
+              type: 'campaign',
+              title: c.name,
+              subtitle: `Active: ${c.startDate} to ${c.endDate}`,
+              status: c.status,
+              id: c.id,
+              originalData: c,
+              campaignId: c.id
+            });
+          }
+      } catch (e) { console.error(e); }
+    });
+
+    // 2. Add Plans in this year
+    filteredCampaigns.forEach(c => {
+      if(c.plans) {
+        c.plans.forEach(p => {
+            if (!p.scheduledDate) return;
+            try {
+                const pDate = parseISO(p.scheduledDate);
+                if (isSameYear(pDate, currentDate)) {
+                    events.push({
+                        date: pDate,
+                        type: 'plan',
+                        title: p.title,
+                        subtitle: `${c.name} • ${p.platform.join(', ')}`,
+                        status: p.status,
+                        id: p.id,
+                        originalData: { plan: p, campaignName: c.name, campaignId: c.id },
+                        campaignId: c.id
+                    });
+                }
+            } catch (e) { console.error(e); }
+        });
+      }
+    });
+
+    // Sort by date
+    return events.sort((a, b) => compareAsc(a.date, b.date));
+  };
+
+  const handleNavigateToEvent = () => {
+      if (selectedEvent) {
+          onNavigate('campaigns', { campaignId: selectedEvent.campaignId });
+      }
+  };
+
+  // Generate Year Options (current year +/- 5)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({length: 11}, (_, i) => currentYear - 5 + i);
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June', 
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-full"><div className="loader"></div></div>;
+  }
+
+  return (
+    <div className="h-full flex flex-col relative">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
+        <div>
+           <h2 className="text-2xl font-bold text-slate-800">Marketing Calendar</h2>
+           <p className="text-sm text-slate-500">
+             {viewMode === 'grid' ? 'Monthly overview' : `Events for ${format(currentDate, 'yyyy')}`}
+           </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+          {/* Branch Filter */}
+          <div className="relative w-full sm:w-auto">
+             <select 
+               className="appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full"
+               value={selectedBranch}
+               onChange={(e) => setSelectedBranch(e.target.value)}
+             >
+               <option value="all">All Branches</option>
+               {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+             </select>
+             <Filter className="absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" size={14} />
+          </div>
+
+          {/* Month/Year Selection */}
+          <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm p-0.5">
+            {viewMode === 'grid' && (
+                <>
+                    <button onClick={prevMonth} className="p-1.5 hover:bg-slate-50 rounded text-slate-500"><ChevronLeft size={18} /></button>
+                    <div className="px-1 border-r border-slate-100">
+                        <select 
+                            value={currentDate.getMonth()} 
+                            onChange={handleMonthChange}
+                            className="appearance-none bg-transparent font-semibold text-slate-700 text-sm py-1 px-1 cursor-pointer hover:text-emerald-600 focus:outline-none"
+                        >
+                            {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                        </select>
+                    </div>
+                </>
+            )}
+            
+            <div className="px-1">
+               <select 
+                  value={currentDate.getFullYear()} 
+                  onChange={handleYearChange}
+                  className="appearance-none bg-transparent text-slate-500 text-sm py-1 px-1 cursor-pointer hover:text-emerald-600 focus:outline-none font-medium"
+               >
+                 {years.map(y => <option key={y} value={y}>{y}</option>)}
+               </select>
+            </div>
+
+            {viewMode === 'grid' && (
+                <button onClick={nextMonth} className="p-1.5 hover:bg-slate-50 rounded text-slate-500"><ChevronRight size={18} /></button>
+            )}
+          </div>
+
+          <button onClick={goToToday} className="hidden sm:block text-xs font-medium bg-white border border-slate-300 px-3 py-2 rounded-lg text-slate-600 hover:text-emerald-600 hover:border-emerald-300 transition-colors">
+            Today
+          </button>
+          
+          {/* View Toggle */}
+          <div className="flex bg-slate-200 p-1 rounded-lg">
+             <button 
+               onClick={() => setViewMode('grid')}
+               className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+               title="Grid View"
+             >
+                <LayoutGrid size={18} />
+             </button>
+             <button 
+               onClick={() => setViewMode('list')}
+               className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+               title="List View"
+             >
+                <List size={18} />
+             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+        
+        {viewMode === 'grid' ? (
+          <>
+            {/* Weekday Headers */}
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* Grid Cells */}
+            <div className="grid grid-cols-7 flex-1 auto-rows-fr overflow-y-auto">
+              {/* Padding for start of month */}
+              {Array.from({ length: monthStart.getDay() }).map((_, i) => (
+                 <div key={`empty-${i}`} className="bg-slate-50/30 border-b border-r border-slate-100"></div>
+              ))}
+
+              {days.map(day => {
+                const activeCampaigns = getActiveCampaignsForDay(day);
+                const plans = getPlansForDay(day);
+                const isToday = isSameDay(day, new Date());
+                
+                return (
+                  <div 
+                    key={day.toString()} 
+                    className={`min-h-[120px] p-1 border-b border-r border-slate-100 transition-colors hover:bg-slate-50 relative group
+                      ${activeCampaigns.length > 0 ? 'bg-slate-50/50' : ''}
+                    `}
+                  >
+                    <div className="flex justify-between items-start mb-1 p-1">
+                      <span className={`text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-slate-900 text-white' : 'text-slate-700'}`}>
+                        {format(day, 'd')}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 overflow-y-auto max-h-[100px] scrollbar-hide px-1">
+                      {/* Render Campaign Bars */}
+                      {activeCampaigns.map(c => {
+                        const isStart = isSameDay(parseISO(c.startDate), day);
+                        const isEnd = isSameDay(parseISO(c.endDate), day);
+                        return (
+                          <div 
+                            key={c.id}
+                            onClick={() => setSelectedEvent({ type: 'campaign', data: c, campaignId: c.id })}
+                            className={`text-[10px] h-5 px-1 flex items-center truncate cursor-pointer hover:opacity-80 mb-0.5
+                              ${isStart ? 'rounded-l-md pl-1.5 font-semibold' : ''}
+                              ${isEnd ? 'rounded-r-md' : ''}
+                              ${!isStart && !isEnd ? 'rounded-none' : ''}
+                              ${getCampaignStyles(c.status)}
+                            `}
+                            title={`Campaign: ${c.name} (${c.status})`}
+                          >
+                             {isStart || day.getDay() === 0 ? c.name : ''} 
+                          </div>
+                        );
+                      })}
+
+                      {/* Render Plans */}
+                      {plans.map((item, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => setSelectedEvent({ type: 'plan', data: item, campaignId: item.campaignId })}
+                          className={`text-[10px] px-2 py-0.5 mb-1 rounded-full border truncate cursor-pointer shadow-sm flex items-center gap-1.5
+                            ${getPlanStyles(item.plan.status)}
+                          `}
+                          title={`${item.plan.platform.join(', ')}: ${item.plan.title} (${item.plan.status})`}
+                        >
+                          <Circle size={4} fill="currentColor" className="flex-shrink-0" />
+                          <span className="truncate">{item.plan.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50">
+             {/* List View - Shows Whole Year */}
+             <div className="space-y-3">
+               {getYearEvents().length > 0 ? (
+                 getYearEvents().map((evt, idx) => (
+                   <div 
+                      key={idx} 
+                      onClick={() => setSelectedEvent({ type: evt.type, data: evt.originalData, campaignId: evt.campaignId })}
+                      className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center gap-4 group"
+                   >
+                      <div className={`flex flex-col items-center justify-center w-14 h-14 rounded-lg flex-shrink-0 ${isSameDay(evt.date, new Date()) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                         <span className="text-xs uppercase font-bold">{format(evt.date, 'MMM')}</span>
+                         <span className="text-xl font-bold">{format(evt.date, 'd')}</span>
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
+                                evt.type === 'campaign' 
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                  : 'bg-slate-50 text-slate-700 border-slate-200'
+                            }`}>
+                               {evt.type === 'campaign' ? 'Campaign' : 'Plan'}
+                            </span>
+                            <h4 className="font-bold text-slate-800 truncate">{evt.title}</h4>
+                         </div>
+                         <p className="text-sm text-slate-500 truncate">{evt.subtitle}</p>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                         <span className={`text-xs px-2 py-1 rounded-full border hidden sm:block font-medium ${
+                            evt.status === 'Active' || evt.status === 'Published' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                            evt.status === 'Planning' || evt.status === 'Scheduled' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                            evt.status === 'On Hold' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                            evt.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-200' :
+                            'bg-slate-100 text-slate-600 border-slate-200'
+                         }`}>
+                           {evt.status}
+                         </span>
+                         <ArrowRight size={18} className="text-slate-300 group-hover:text-emerald-500 transition-colors"/>
+                      </div>
+                   </div>
+                 ))
+               ) : (
+                 <div className="text-center py-20 text-slate-400 flex flex-col items-center">
+                    <CalIcon size={48} className="mb-4 text-slate-200" />
+                    <p>No events found for {format(currentDate, 'yyyy')}</p>
+                 </div>
+               )}
+             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Details Modal */}
+      {selectedEvent && (
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4" onClick={() => setSelectedEvent(null)}>
+           <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full animate-fadeIn" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start mb-4">
+                 <h3 className="font-bold text-lg text-slate-800">
+                    {selectedEvent.type === 'campaign' ? 'Campaign Details' : 'Marketing Plan'}
+                 </h3>
+                 <button onClick={() => setSelectedEvent(null)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+              </div>
+
+              {selectedEvent.type === 'campaign' ? (
+                <div className="space-y-3">
+                   <div className="w-full h-32 bg-slate-100 rounded-lg overflow-hidden">
+                      {selectedEvent.data.poster ? (
+                        <img src={selectedEvent.data.poster} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">No Poster</div>
+                      )}
+                   </div>
+                   <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getCampaignStyles(selectedEvent.data.status).split(' ').slice(0,2).join(' ')}`}>
+                        {selectedEvent.data.status}
+                      </span>
+                   </div>
+                   <h4 className="font-bold text-slate-800">{selectedEvent.data.name}</h4>
+                   <p className="text-sm text-slate-600">{selectedEvent.data.description}</p>
+                   <div className="text-sm text-slate-500 flex items-center gap-2">
+                     <CalIcon size={14}/> {selectedEvent.data.startDate} - {selectedEvent.data.endDate}
+                   </div>
+                   <div className="pt-3 border-t">
+                      <p className="text-xs text-slate-400 uppercase">Revenue (Target / Actual)</p>
+                      <p className="font-bold text-slate-800">
+                        RM {selectedEvent.data.targetRevenue.toLocaleString()} / <span className="text-emerald-600">RM {selectedEvent.data.actualRevenue.toLocaleString()}</span>
+                      </p>
+                   </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                   <h4 className="font-bold text-slate-800">{selectedEvent.data.plan.title}</h4>
+                   <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getPlanStyles(selectedEvent.data.plan.status).split(' ').slice(0,2).join(' ')}`}>
+                        {selectedEvent.data.plan.status}
+                      </span>
+                   </div>
+                   <p className="text-sm text-slate-600">Campaign: <span className="font-medium">{selectedEvent.data.campaignName}</span></p>
+                   
+                   {/* Description Display */}
+                   {selectedEvent.data.plan.description && (
+                       <div className="bg-slate-50 p-2 rounded text-xs text-slate-600 italic">
+                           {selectedEvent.data.plan.description}
+                       </div>
+                   )}
+
+                   <div className="flex flex-wrap gap-2">
+                      {selectedEvent.data.plan.platform.map((p: string) => (
+                         <span key={p} className="text-xs px-2 py-1 bg-slate-50 border rounded shadow-sm">{p}</span>
+                      ))}
+                   </div>
+                   <div className="pt-2">
+                      <p className="text-xs text-slate-400 uppercase">Cost (Budget / Actual)</p>
+                      <p className="font-bold text-slate-800">RM {selectedEvent.data.plan.budget} / RM {selectedEvent.data.plan.cost}</p>
+                   </div>
+                </div>
+              )}
+              
+              <div className="mt-6 pt-4 border-t border-slate-100">
+                <button 
+                    onClick={handleNavigateToEvent}
+                    className="w-full flex justify-center items-center gap-2 bg-slate-900 text-white py-2 rounded-lg text-sm hover:bg-slate-800 transition-colors"
+                >
+                    View in Campaign Manager <ArrowRight size={14} />
+                </button>
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CalendarView;
+
+
+---------------------------------
+FILE NAME: Campaigns.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\pages\Campaigns.tsx
+---------------------------------
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  getCampaigns, getBranches, getCategories, getEventTypes,
+  updateCampaignStatus, addMarketingPlan, addCampaign, updateCampaign, updateMarketingPlan 
+} from '../services/storage';
+import { Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventType } from '../types';
+import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Trash, Tag, CheckSquare, CalendarDays, Filter } from 'lucide-react';
+
+import { 
+  parseISO, 
+  isValid, 
+  startOfYear, 
+  endOfYear, 
+  startOfMonth, 
+  endOfMonth 
+} from 'date-fns';
+
+interface CampaignsProps {
+  initialExpandedId?: string;
+}
+
+const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Filter States
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  
+  // Date Filter States (Default to Current Year)
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Refs for scrolling
+  const campaignRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  // --- Campaign Modal State ---
+  const [showCampModal, setShowCampModal] = useState(false);
+  const [isEditCamp, setIsEditCamp] = useState(false);
+  const [editingCampId, setEditingCampId] = useState<string | null>(null);
+  
+  const [campName, setCampName] = useState('');
+  const [campStart, setCampStart] = useState('');
+  const [campEnd, setCampEnd] = useState('');
+  const [campBranch, setCampBranch] = useState('');
+  const [campCategory, setCampCategory] = useState('');
+  const [campEvent, setCampEvent] = useState('');
+  const [campTarget, setCampTarget] = useState('');
+  const [campActualRev, setCampActualRev] = useState('');
+  const [campDesc, setCampDesc] = useState('');
+  const [campImage, setCampImage] = useState(''); // Base64
+
+  // --- Plan Modal State ---
+  const [showPlanModal, setShowPlanModal] = useState<string | null>(null); // holds campaign ID
+  const [isEditPlan, setIsEditPlan] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+  const [planTitle, setPlanTitle] = useState('');
+  const [planDesc, setPlanDesc] = useState(''); // New State
+  const [planPlatforms, setPlanPlatforms] = useState<string[]>([]);
+  const [planCustomPlatform, setPlanCustomPlatform] = useState('');
+  const [planDate, setPlanDate] = useState('');
+  const [planBudget, setPlanBudget] = useState('');
+  const [planCost, setPlanCost] = useState('');
+  const [planStatus, setPlanStatus] = useState<'Draft' | 'Scheduled' | 'Published' | 'Cancelled'>('Draft');
+
+  const COMMON_PLATFORMS = ['Facebook', 'Instagram', 'TikTok', 'Email', 'Google Ads', 'Offline'];
+
+  // Input Class for consistent styling (White background, dark text)
+  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none placeholder-slate-400";
+
+  useEffect(() => {
+    refreshData();
+  }, []);
+
+  // Handle deep linking to specific campaign
+  useEffect(() => {
+    if (initialExpandedId && campaigns.length > 0) {
+      setExpandedId(initialExpandedId);
+      // Wait for render then scroll
+      setTimeout(() => {
+        if (campaignRefs.current[initialExpandedId]) {
+          campaignRefs.current[initialExpandedId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [initialExpandedId, campaigns]);
+
+  const refreshData = async () => {
+    setIsLoading(true);
+    try {
+        const [c, b, cat, evt] = await Promise.all([
+            getCampaigns(),
+            getBranches(),
+            getCategories(),
+            getEventTypes()
+        ]);
+        setCampaigns(c);
+        setBranches(b);
+        setCategories(cat);
+        setEventTypes(evt);
+    } catch(e) {
+        console.error(e);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(expandedId === id ? null : id);
+  };
+
+  const handleStatusChange = async (e: React.MouseEvent, id: string, current: CampaignStatus) => {
+    e.stopPropagation();
+    const statuses: CampaignStatus[] = ['Planning', 'Active', 'Completed', 'On Hold', 'Cancelled'];
+    const nextIndex = (statuses.indexOf(current) + 1) % statuses.length;
+    const nextStatus = statuses[nextIndex];
+    await updateCampaignStatus(id, nextStatus);
+    refreshData();
+  };
+
+  const handlePlanStatusChange = async (e: React.MouseEvent, campaignId: string, plan: MarketingPlan) => {
+    e.stopPropagation();
+    const statuses: MarketingPlan['status'][] = ['Draft', 'Scheduled', 'Published', 'Cancelled'];
+    const nextIndex = (statuses.indexOf(plan.status) + 1) % statuses.length;
+    const nextStatus = statuses[nextIndex];
+    
+    await updateMarketingPlan(campaignId, {
+        ...plan,
+        status: nextStatus
+    });
+    refreshData();
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCampImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // --- Campaign Handlers ---
+
+  const openNewCampaignModal = () => {
+    resetCampForm();
+    setIsEditCamp(false);
+    setShowCampModal(true);
+  };
+
+  const openEditCampaignModal = (e: React.MouseEvent, c: Campaign) => {
+    e.stopPropagation();
+    setCampName(c.name);
+    setCampStart(c.startDate);
+    setCampEnd(c.endDate);
+    setCampBranch(c.branchId);
+    setCampCategory(c.categoryId || '');
+    setCampEvent(c.eventTypeId || '');
+    setCampTarget(c.targetRevenue.toString());
+    setCampActualRev(c.actualRevenue.toString());
+    setCampDesc(c.description);
+    setCampImage(c.poster || '');
+    setEditingCampId(c.id);
+    setIsEditCamp(true);
+    setShowCampModal(true);
+  };
+
+  const handleSaveCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!campName || !campBranch) return;
+
+    const campData = {
+        branchId: campBranch,
+        categoryId: campCategory,
+        eventTypeId: campEvent,
+        name: campName,
+        startDate: campStart,
+        endDate: campEnd,
+        targetRevenue: Number(campTarget),
+        actualRevenue: Number(campActualRev),
+        description: campDesc,
+        poster: campImage
+    };
+
+    if (isEditCamp && editingCampId) {
+        // Update existing
+        const existing = campaigns.find(c => c.id === editingCampId);
+        if (existing) {
+            await updateCampaign({
+                ...existing,
+                ...campData
+            });
+        }
+    } else {
+        // Create New
+        await addCampaign({
+            id: '', // Generated by Firestore
+            ...campData,
+            status: 'Planning',
+            plans: []
+        });
+    }
+
+    refreshData();
+    setShowCampModal(false);
+    resetCampForm();
+  };
+
+  const resetCampForm = () => {
+    setCampName(''); setCampStart(''); setCampEnd(''); setCampTarget(''); 
+    setCampActualRev('0'); setCampDesc(''); setCampImage(''); setCampBranch('');
+    setCampCategory(''); setCampEvent('');
+    setEditingCampId(null);
+  };
+
+  // --- Plan Handlers ---
+
+  const openNewPlanModal = (campaignId: string) => {
+    resetPlanForm();
+    setIsEditPlan(false);
+    setShowPlanModal(campaignId);
+  };
+
+  const openEditPlanModal = (campaignId: string, plan: MarketingPlan) => {
+    setPlanTitle(plan.title);
+    setPlanDesc(plan.description || ''); // Set Description
+    setPlanPlatforms(plan.platform);
+    setPlanDate(plan.scheduledDate);
+    setPlanBudget(plan.budget.toString());
+    setPlanCost(plan.cost.toString());
+    setPlanStatus(plan.status);
+    setEditingPlanId(plan.id);
+    setIsEditPlan(true);
+    setShowPlanModal(campaignId);
+  };
+
+  const handleSavePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPlanModal || !planTitle) return;
+
+    // Use default platform if none selected
+    const finalPlatforms = planPlatforms.length > 0 ? planPlatforms : ['Offline'];
+
+    const planData = {
+        title: planTitle,
+        description: planDesc, // Save Description
+        platform: finalPlatforms,
+        scheduledDate: planDate,
+        status: planStatus,
+        budget: Number(planBudget),
+        cost: Number(planCost)
+    };
+
+    if (isEditPlan && editingPlanId) {
+        await updateMarketingPlan(showPlanModal, {
+            id: editingPlanId,
+            ...planData
+        });
+    } else {
+        await addMarketingPlan(showPlanModal, {
+            id: `p${Date.now()}`,
+            ...planData
+        });
+    }
+
+    refreshData();
+    setShowPlanModal(null);
+    resetPlanForm();
+  };
+
+  const togglePlatform = (p: string) => {
+    if (planPlatforms.includes(p)) {
+        setPlanPlatforms(planPlatforms.filter(item => item !== p));
+    } else {
+        setPlanPlatforms([...planPlatforms, p]);
+    }
+  };
+
+  const addCustomPlatform = () => {
+    if(planCustomPlatform && !planPlatforms.includes(planCustomPlatform)) {
+        setPlanPlatforms([...planPlatforms, planCustomPlatform]);
+        setPlanCustomPlatform('');
+    }
+  };
+
+  const resetPlanForm = () => {
+    setPlanTitle(''); setPlanDesc(''); setPlanPlatforms([]); setPlanCustomPlatform('');
+    setPlanDate(''); setPlanBudget(''); setPlanCost(''); setPlanStatus('Draft');
+    setEditingPlanId(null);
+  };
+
+  // --- Utils ---
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Active': return 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200';
+      case 'Planning': return 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200';
+      case 'Completed': return 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200';
+      case 'On Hold': return 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200';
+      case 'Cancelled': return 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200';
+    }
+  };
+
+  const getPlatformIcon = (platform: string) => {
+    const pLower = platform.toLowerCase();
+    if(pLower.includes('facebook')) return <Facebook size={14} className="text-blue-600" />;
+    if(pLower.includes('instagram')) return <Instagram size={14} className="text-pink-600" />;
+    if(pLower.includes('tiktok')) return <Video size={14} className="text-black" />;
+    if(pLower.includes('email')) return <Mail size={14} className="text-orange-500" />;
+    return <Globe size={14} className="text-gray-500" />;
+  };
+
+  const filteredCampaigns = campaigns.filter(c => {
+    // 1. Basic Filters
+    const branchMatch = selectedBranch === 'all' || c.branchId === selectedBranch;
+    const categoryMatch = selectedCategory === 'all' || c.categoryId === selectedCategory;
+
+    // 2. Date Filter (Overlapping logic)
+    // If "All Years" is selected, we show all (effectively ignoring dates)
+    if (selectedYear === 'all') return branchMatch && categoryMatch;
+
+    const cStart = parseISO(c.startDate);
+    const cEnd = parseISO(c.endDate);
+
+    // If invalid dates on campaign, hide it if filter is active
+    if (!isValid(cStart) || !isValid(cEnd)) return false;
+
+    const yearInt = parseInt(selectedYear);
+    let filterStart, filterEnd;
+
+    if (selectedMonth === 'all') {
+        // Whole Year Filter
+        filterStart = startOfYear(new Date(yearInt, 0, 1));
+        filterEnd = endOfYear(new Date(yearInt, 0, 1));
+    } else {
+        // Specific Month Filter
+        const monthInt = parseInt(selectedMonth);
+        filterStart = startOfMonth(new Date(yearInt, monthInt, 1));
+        filterEnd = endOfMonth(new Date(yearInt, monthInt, 1));
+    }
+
+    // Check overlap: (StartA <= EndB) and (EndA >= StartB)
+    const dateMatch = cStart <= filterEnd && cEnd >= filterStart;
+
+    return branchMatch && categoryMatch && dateMatch;
+  });
+
+  // Generate Year Options (Current +/- 2 years)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June', 
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-full"><div className="loader"></div></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+           <h2 className="text-2xl font-bold text-slate-800">Campaign Manager</h2>
+           <p className="text-sm text-slate-500">Plan and track your marketing efforts</p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+            {/* Year Filter */}
+            <div className="relative">
+                <select 
+                className={`${inputClass} w-full sm:w-auto font-medium`}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                >
+                <option value="all">All Years</option>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+            </div>
+
+            {/* Month Filter */}
+            <div className="relative">
+                <select 
+                className={`${inputClass} w-full sm:w-auto font-medium disabled:opacity-50 disabled:bg-slate-50`}
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                disabled={selectedYear === 'all'}
+                >
+                <option value="all">All Months</option>
+                {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                </select>
+            </div>
+
+          {/* Branch Filter */}
+          <div className="relative">
+            <select 
+              className={`${inputClass} w-full sm:w-auto`}
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+            >
+              <option value="all">All Branches</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div className="relative">
+            <select 
+              className={`${inputClass} w-full sm:w-auto`}
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+            >
+              <option value="all">All Categories</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <button 
+            onClick={openNewCampaignModal}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2 justify-center sm:justify-start"
+          >
+            <Plus size={18} /> New Campaign
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="space-y-4">
+        {filteredCampaigns.map((campaign) => {
+          const totalBudget = (campaign.plans || []).reduce((acc, p) => acc + (p.budget || 0), 0);
+          const totalActualCost = (campaign.plans || []).reduce((acc, p) => acc + (p.cost || 0), 0);
+          const catName = categories.find(c => c.id === campaign.categoryId)?.name;
+          const evtName = eventTypes.find(e => e.id === campaign.eventTypeId)?.name;
+          
+          return (
+            <div 
+                key={campaign.id} 
+                ref={(el) => { campaignRefs.current[campaign.id] = el; }}
+                className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all duration-300
+                    ${expandedId === campaign.id ? 'ring-2 ring-emerald-500 border-emerald-500' : 'border-slate-200'}
+                `}
+            >
+              {/* Header Row */}
+              <div 
+                className="p-5 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-slate-50 relative group"
+                onClick={() => toggleExpand(campaign.id)}
+              >
+                <div className="flex-1 min-w-0 mb-4 md:mb-0 flex gap-4">
+                   {campaign.poster ? (
+                     <img src={campaign.poster} alt="Poster" className="w-16 h-16 rounded-md object-cover border border-slate-100 hidden sm:block" />
+                   ) : (
+                     <div className="w-16 h-16 rounded-md bg-slate-100 flex items-center justify-center text-slate-300 hidden sm:flex">
+                       <ImageIcon size={24} />
+                     </div>
+                   )}
+                   
+                   <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-lg font-bold text-slate-900 truncate">{campaign.name}</h3>
+                        <button 
+                          onClick={(e) => handleStatusChange(e, campaign.id, campaign.status)}
+                          className={`text-xs px-2.5 py-0.5 rounded-full border font-medium transition-colors ${getStatusColor(campaign.status)}`}
+                          title="Click to change status"
+                        >
+                          {campaign.status}
+                        </button>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
+                        <span className="flex items-center gap-1"><CalIcon size={14} /> {campaign.startDate} to {campaign.endDate}</span>
+                        <span className="text-xs text-slate-400 hidden sm:inline">|</span>
+                        <span className="text-slate-600">{branches.find(b => b.id === campaign.branchId)?.name || 'Unknown Branch'}</span>
+                      </div>
+                      
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {catName && <span className="text-[10px] px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded-full flex items-center gap-1"><Tag size={10}/> {catName}</span>}
+                        {evtName && <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-full flex items-center gap-1"><CalendarDays size={10}/> {evtName}</span>}
+                      </div>
+                   </div>
+                </div>
+
+                <div className="flex items-center gap-6">
+                   <div className="text-right hidden md:block">
+                      <span className="block text-xs text-slate-500">Cost (Budg. / Act.)</span>
+                      <span className="font-semibold text-slate-700">RM {totalBudget.toLocaleString()} / <span className={totalActualCost > totalBudget ? 'text-red-600' : 'text-slate-700'}>{totalActualCost.toLocaleString()}</span></span>
+                   </div>
+                   <div className="text-right hidden md:block">
+                      <span className="block text-xs text-slate-500">Revenue (Target / Act.)</span>
+                      <span className="font-bold text-slate-700">RM {campaign.targetRevenue.toLocaleString()} / <span className="text-emerald-600">{campaign.actualRevenue.toLocaleString()}</span></span>
+                   </div>
+                   
+                   <div className="flex items-center gap-3">
+                       {/* Edit Button - only visible on hover or mobile */}
+                        <button 
+                            onClick={(e) => openEditCampaignModal(e, campaign)}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors md:opacity-0 group-hover:opacity-100"
+                            title="Edit Campaign"
+                        >
+                            <Pencil size={18} />
+                        </button>
+                       {expandedId === campaign.id ? <ChevronUp className="text-slate-400" /> : <ChevronDown className="text-slate-400" />}
+                   </div>
+                </div>
+              </div>
+
+              {/* Expanded Details */}
+              {expandedId === campaign.id && (
+                <div className="bg-slate-50 border-t border-slate-200 p-5 animate-fadeIn">
+                  <div className="flex flex-col md:flex-row gap-6">
+                    {/* Left: Description & Poster */}
+                    <div className="md:w-1/3 space-y-4">
+                       {campaign.poster && (
+                         <div className="relative group rounded-lg overflow-hidden border border-slate-200">
+                           <img src={campaign.poster} alt="Campaign Poster" className="w-full h-48 object-cover" />
+                         </div>
+                       )}
+                       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</h4>
+                         <p className="text-sm text-slate-600 italic">{campaign.description || "No description provided."}</p>
+                       </div>
+                    </div>
+
+                    {/* Right: Plans */}
+                    <div className="md:w-2/3">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Marketing Plans</h4>
+                        <button 
+                          onClick={() => openNewPlanModal(campaign.id)}
+                          className="text-xs flex items-center gap-1 bg-white border border-slate-300 px-2 py-1 rounded hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 transition-all"
+                        >
+                          <Plus size={12} /> Add Plan
+                        </button>
+                      </div>
+                      
+                      {campaign.plans && campaign.plans.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-3">
+                          {campaign.plans.map(plan => (
+                            <div key={plan.id} className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:shadow-sm transition-shadow">
+                               <div className="flex items-center gap-3">
+                                  <div className="flex -space-x-1">
+                                      {plan.platform.map((plat, idx) => (
+                                          <div key={idx} className="w-8 h-8 rounded-full bg-slate-100 border border-white flex items-center justify-center text-slate-500 relative z-10">
+                                              {getPlatformIcon(plat)}
+                                          </div>
+                                      ))}
+                                  </div>
+                                  <div>
+                                     <p className="text-sm font-semibold text-slate-800">{plan.title}</p>
+                                     <p className="text-xs text-slate-500">{plan.scheduledDate}</p>
+                                  </div>
+                               </div>
+                               <div className="flex items-center gap-4">
+                                   <div className="text-right">
+                                        <div className="text-[10px] text-slate-400">Budget / Actual</div>
+                                        <span className="block text-xs font-bold text-slate-700">RM {plan.budget} / {plan.cost}</span>
+                                   </div>
+                                   <div className="text-right">
+                                        <div className="text-[10px] text-slate-400">Status</div>
+                                        <button 
+                                            onClick={(e) => handlePlanStatusChange(e, campaign.id, plan)}
+                                            className={`text-[10px] uppercase font-medium px-1.5 py-0.5 rounded border transition-colors ${
+                                                plan.status === 'Published' ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 
+                                                plan.status === 'Scheduled' ? 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200' :
+                                                plan.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200' :
+                                                'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                                            }`}
+                                            title="Click to cycle status"
+                                        >
+                                            {plan.status}
+                                        </button>
+                                   </div>
+                                   <button 
+                                     onClick={() => openEditPlanModal(campaign.id, plan)}
+                                     className="text-slate-300 hover:text-blue-500 p-1"
+                                   >
+                                     <Pencil size={14} />
+                                   </button>
+                               </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-400 italic bg-white p-4 rounded border border-dashed border-slate-300 text-center">
+                          No marketing plans added yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filteredCampaigns.length === 0 && (
+             <div className="text-center py-10 bg-slate-50 rounded-lg border border-slate-200 text-slate-500">
+                 <Tag size={32} className="mx-auto mb-2 text-slate-300"/>
+                 <p>No campaigns found matching filters.</p>
+             </div>
+        )}
+      </div>
+
+      {/* Campaign Modal (New & Edit) */}
+      {showCampModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="bg-slate-900 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-white">{isEditCamp ? 'Edit Campaign' : 'Create New Campaign'}</h3>
+              <button onClick={() => setShowCampModal(false)} className="text-slate-400 hover:text-white"><X size={20}/></button>
+            </div>
+            
+            <form onSubmit={handleSaveCampaign} className="p-6 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Name</label>
+                  <input type="text" required value={campName} onChange={e => setCampName(e.target.value)} className={inputClass} placeholder="Summer Promo" />
+                </div>
+                
+                <div>
+                   <label className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
+                   <select required value={campBranch} onChange={e => setCampBranch(e.target.value)} className={inputClass}>
+                     <option value="">Select Branch</option>
+                     {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                   </select>
+                </div>
+
+                <div>
+                   <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                   <select value={campCategory} onChange={e => setCampCategory(e.target.value)} className={inputClass}>
+                     <option value="">Select Category</option>
+                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                   </select>
+                </div>
+
+                <div>
+                   <label className="block text-sm font-medium text-slate-700 mb-1">Event Type</label>
+                   <select value={campEvent} onChange={e => setCampEvent(e.target.value)} className={inputClass}>
+                     <option value="">Select Event Type</option>
+                     {eventTypes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                   </select>
+                </div>
+
+                {/* Financials Row */}
+                <div className="col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Target Revenue (RM)</label>
+                        <input type="number" required value={campTarget} onChange={e => setCampTarget(e.target.value)} className={inputClass} placeholder="0.00" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Actual Revenue (RM)</label>
+                        <input type="number" value={campActualRev} onChange={e => setCampActualRev(e.target.value)} className={`${inputClass} border-emerald-200`} placeholder="0.00" />
+                    </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                  <input type="date" required value={campStart} onChange={e => setCampStart(e.target.value)} className={inputClass} />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                  <input type="date" required value={campEnd} onChange={e => setCampEnd(e.target.value)} className={inputClass} />
+                </div>
+                
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                  <textarea rows={2} value={campDesc} onChange={e => setCampDesc(e.target.value)} className={inputClass} placeholder="Describe the campaign..." />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Upload Poster (Image)</label>
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
+                  {campImage && <div className="mt-2 text-xs text-green-600 flex items-center gap-1"><CheckSquare size={12}/> Image loaded</div>}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button type="button" onClick={() => setShowCampModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">{isEditCamp ? 'Save Changes' : 'Create Campaign'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Modal (New & Edit) */}
+      {showPlanModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+             <div className="bg-slate-900 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+               <h3 className="text-lg font-bold text-white">{isEditPlan ? 'Edit Marketing Plan' : 'Add Marketing Plan'}</h3>
+               <button onClick={() => setShowPlanModal(null)} className="text-slate-400 hover:text-white"><X size={20}/></button>
+             </div>
+             
+             <form onSubmit={handleSavePlan} className="p-6 space-y-4 overflow-y-auto">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Plan Title</label>
+                  <input type="text" required value={planTitle} onChange={e => setPlanTitle(e.target.value)} className={inputClass} placeholder="e.g. Teaser Post" />
+                </div>
+                
+                {/* Multi-Platform Select */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Platforms</label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                      {COMMON_PLATFORMS.map(p => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => togglePlatform(p)}
+                            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                                planPlatforms.includes(p) 
+                                ? 'bg-emerald-600 text-white border-emerald-600' 
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400'
+                            }`}
+                          >
+                              {p}
+                          </button>
+                      ))}
+                  </div>
+                  {/* Custom Platform */}
+                  <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={planCustomPlatform} 
+                        onChange={e => setPlanCustomPlatform(e.target.value)} 
+                        placeholder="Add other..." 
+                        className="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg bg-white text-slate-900"
+                      />
+                      <button 
+                        type="button" 
+                        onClick={addCustomPlatform}
+                        className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
+                      >
+                          Add
+                      </button>
+                  </div>
+                  {/* Selected Chips */}
+                  {planPlatforms.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
+                          {planPlatforms.map(p => (
+                              <span key={p} className="text-xs flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded text-slate-700">
+                                  {p} <X size={10} className="cursor-pointer hover:text-red-500" onClick={() => togglePlatform(p)}/>
+                              </span>
+                          ))}
+                      </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Scheduled Date</label>
+                  <input type="date" required value={planDate} onChange={e => setPlanDate(e.target.value)} className={inputClass} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Budget (RM)</label>
+                        <input type="number" required value={planBudget} onChange={e => setPlanBudget(e.target.value)} className={inputClass} placeholder="0.00" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Actual Cost (RM)</label>
+                        <input type="number" required value={planCost} onChange={e => setPlanCost(e.target.value)} className={inputClass} placeholder="0.00" />
+                    </div>
+                </div>
+
+                {/* Description Input */}
+                <div>
+                   <label className="block text-sm font-medium text-slate-700 mb-1">Description / Notes</label>
+                   <textarea 
+                     rows={3} 
+                     value={planDesc} 
+                     onChange={e => setPlanDesc(e.target.value)} 
+                     className={inputClass} 
+                     placeholder="Add details, caption ideas, or notes..." 
+                   />
+                </div>
+
+                {isEditPlan && (
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                        <select value={planStatus} onChange={e => setPlanStatus(e.target.value as any)} className={inputClass}>
+                            <option value="Draft">Draft</option>
+                            <option value="Scheduled">Scheduled</option>
+                            <option value="Published">Published</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                )}
+
+                <div className="flex justify-end gap-2 mt-6 pt-2 border-t">
+                   <button type="button" onClick={() => setShowPlanModal(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg">Cancel</button>
+                   <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">{isEditPlan ? 'Save Changes' : 'Add Plan'}</button>
+                </div>
+             </form>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Campaigns;
+
+
+---------------------------------
+FILE NAME: Dashboard.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\pages\Dashboard.tsx
+---------------------------------
+import React, { useMemo, useState, useEffect } from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell 
+} from 'recharts';
+import { DollarSign, Wallet, Megaphone, CheckSquare, ChevronDown, X, ArrowRight, Calendar, Filter, CalendarDays } from 'lucide-react';
+import { getCampaigns, getBranches } from '../services/storage';
+import { Branch, MarketingPlan, Campaign, KPI } from '../types';
+
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfYear, 
+  endOfYear, 
+  startOfDay, 
+  endOfDay, 
+  isWithinInterval, 
+  isValid, 
+  parseISO 
+} from 'date-fns';
+
+interface DashboardProps {
+  onNavigate: (view: string, data?: any) => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Filter Mode State
+  const [filterMode, setFilterMode] = useState<'month' | 'range'>('month');
+
+  // Month/Year State (Defaults to Current)
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Date Range State (Driven by filterMode)
+  const [startDate, setStartDate] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(() => format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  
+  // Modal State for KPI drills
+  const [kpiModal, setKpiModal] = useState<{
+    title: string;
+    items: Array<{ plan: MarketingPlan, campaignName: string, campaignId: string }>;
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+        try {
+            const [c, b] = await Promise.all([getCampaigns(), getBranches()]);
+            setAllCampaigns(c);
+            setBranches(b);
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+    fetchData();
+  }, []);
+
+  // Effect: Update start/end date when Month/Year changes
+  useEffect(() => {
+    if (filterMode === 'month') {
+        const start = startOfMonth(new Date(selectedYear, selectedMonth));
+        const end = endOfMonth(new Date(selectedYear, selectedMonth));
+        setStartDate(format(start, 'yyyy-MM-dd'));
+        setEndDate(format(end, 'yyyy-MM-dd'));
+    }
+  }, [selectedMonth, selectedYear, filterMode]);
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'start' | 'end') => {
+      const val = e.target.value;
+      if (field === 'start') setStartDate(val);
+      else setEndDate(val);
+  };
+
+  const handleSafePicker = (e: React.MouseEvent<HTMLInputElement>) => {
+    try {
+      if ('showPicker' in HTMLInputElement.prototype) {
+        e.currentTarget.showPicker();
+      }
+    } catch (error) {
+      console.debug("SafePicker: Browser prevented showPicker, falling back to default behavior", error);
+    }
+  };
+
+  // --- Filtering Logic ---
+  const filteredData = useMemo(() => {
+    // 1. Filter by Branch
+    let relevantCampaigns = selectedBranch === 'all' 
+      ? allCampaigns 
+      : allCampaigns.filter(c => c.branchId === selectedBranch);
+
+    if (!startDate || !endDate) {
+        return { campaigns: relevantCampaigns, plans: [] }; // Fallback if invalid
+    }
+
+    try {
+        const start = startOfDay(parseISO(startDate));
+        const end = endOfDay(parseISO(endDate));
+        
+        if (!isValid(start) || !isValid(end)) {
+            return { campaigns: [], plans: [] };
+        }
+
+        // 2. Identify Campaigns overlapping the date range
+        const campaignOverlaps = (c: Campaign) => {
+           if (!c.startDate || !c.endDate) return false;
+           try {
+             const cStart = parseISO(c.startDate);
+             const cEnd = parseISO(c.endDate);
+             return isValid(cStart) && isValid(cEnd) && (cStart <= end && cEnd >= start);
+           } catch { return false; }
+        };
+
+        const activeCampaignsInRange = relevantCampaigns.filter(campaignOverlaps);
+
+        // 3. Filter Marketing Plans strictly within range
+        const plansInRange: Array<{ plan: MarketingPlan, campaignName: string, campaignId: string }> = [];
+        relevantCampaigns.forEach(c => {
+           if(c.plans) {
+             c.plans.forEach(p => {
+                if (p.scheduledDate) {
+                    try {
+                      const pDate = parseISO(p.scheduledDate);
+                      if (isValid(pDate) && isWithinInterval(pDate, { start, end })) {
+                          plansInRange.push({ plan: p, campaignName: c.name, campaignId: c.id });
+                      }
+                    } catch {}
+                }
+             });
+           }
+        });
+
+        return {
+           campaigns: activeCampaignsInRange,
+           plans: plansInRange
+        };
+
+    } catch (error) {
+        console.error("Date filtering error:", error);
+        return { campaigns: [], plans: [] };
+    }
+
+  }, [allCampaigns, selectedBranch, startDate, endDate]);
+
+
+  // Calculate KPIs
+  const kpis: KPI[] = useMemo(() => {
+    const totalRevenue = filteredData.campaigns.reduce((acc, c) => acc + (c.actualRevenue || 0), 0);
+    const totalSpend = filteredData.plans.reduce((acc, item) => acc + (item.plan.cost || 0), 0);
+    const activePlansList = filteredData.plans.filter(item => item.plan.status !== 'Draft');
+    const pendingTasksList = filteredData.plans.filter(item => item.plan.status !== 'Published');
+
+    return [
+      { 
+        label: 'Revenue (Campaigns)', 
+        value: `RM ${totalRevenue.toLocaleString()}`, 
+        icon: DollarSign, 
+        color: 'text-emerald-600', 
+        bg: 'bg-emerald-100',
+        clickable: false,
+        trend: 0,
+        trendUp: true
+      },
+      { 
+        label: 'Marketing Spend', 
+        value: `RM ${totalSpend.toLocaleString()}`, 
+        icon: Wallet, 
+        color: 'text-blue-600', 
+        bg: 'bg-blue-100',
+        clickable: false,
+        trend: 0,
+        trendUp: true
+      },
+      { 
+        label: 'Active Plans', 
+        value: activePlansList.length.toString(), 
+        icon: Megaphone, 
+        color: 'text-orange-600', 
+        bg: 'bg-orange-100',
+        clickable: true,
+        items: activePlansList,
+        trend: 0,
+        trendUp: true
+      },
+      { 
+        label: 'Pending Tasks', 
+        value: pendingTasksList.length.toString(), 
+        icon: CheckSquare, 
+        color: 'text-purple-600', 
+        bg: 'bg-purple-100',
+        clickable: true,
+        items: pendingTasksList,
+        trend: 0,
+        trendUp: true
+      },
+    ];
+  }, [filteredData]);
+
+  // Chart Data Preparation
+  const revenueData = filteredData.campaigns.map(c => {
+    const campaignSpendInRange = filteredData.plans
+        .filter(p => p.campaignId === c.id)
+        .reduce((sum, item) => sum + (item.plan.cost || 0), 0);
+
+    return {
+      name: c.name.split(' ').slice(0, 2).join(' '), // Shorten name
+      revenue: c.actualRevenue, 
+      spend: campaignSpendInRange
+    };
+  });
+
+  const platformData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredData.plans.forEach(item => {
+        item.plan.platform.forEach(plat => {
+            counts[plat] = (counts[plat] || 0) + 1;
+        });
+    });
+    return Object.keys(counts).map(key => ({ name: key, value: counts[key] }));
+  }, [filteredData]);
+
+  const COLORS = ['#059669', '#2563EB', '#D97706', '#7C3AED', '#DB2777', '#64748b', '#000000', '#EF4444'];
+
+  const handleKpiClick = (kpi: KPI) => {
+    if (kpi.clickable && kpi.items && kpi.items.length > 0) {
+        setKpiModal({ title: kpi.label, items: kpi.items });
+    }
+  };
+
+  const handleNavigateToPlan = (campaignId: string) => {
+      onNavigate('campaigns', { campaignId });
+  };
+
+  // Generate Year Options
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({length: 6}, (_, i) => currentYear - 3 + i);
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-full"><div className="loader"></div></div>;
+  }
+
+  return (
+    <div className="space-y-6 isolate">
+      {/* Header & Filters */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+            <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
+            <p className="text-sm text-slate-500">
+                {filterMode === 'month' 
+                 ? `Performance for ${months[selectedMonth]} ${selectedYear}`
+                 : 'Performance for selected range'
+                }
+            </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto items-center">
+             
+            {/* View Toggle */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 z-20">
+                <button 
+                  onClick={() => setFilterMode('month')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterMode === 'month' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  Monthly
+                </button>
+                <button 
+                  onClick={() => setFilterMode('range')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterMode === 'range' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  Custom Range
+                </button>
+            </div>
+
+            {/* Branch Filter */}
+            <div className="relative w-full sm:w-auto min-w-[150px] z-20">
+                <select 
+                  className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium cursor-pointer hover:bg-slate-50 transition-colors"
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                >
+                  <option value="all">All Branches</option>
+                  {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
+            </div>
+
+            {/* Date Controls */}
+            {filterMode === 'month' ? (
+                <div className="flex gap-2 z-20 w-full sm:w-auto">
+                    <div className="relative w-1/2 sm:w-auto">
+                        <select 
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                            className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium cursor-pointer"
+                        >
+                            {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" size={14} />
+                    </div>
+                    <div className="relative w-1/2 sm:w-auto">
+                        <select 
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                            className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium cursor-pointer"
+                        >
+                            {years.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" size={14} />
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center gap-2 relative z-20 w-full sm:w-auto">
+                    <input 
+                        type="date" 
+                        value={startDate}
+                        onChange={(e) => handleDateChange(e, 'start')}
+                        onClick={handleSafePicker}
+                        className="w-full sm:w-auto bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm cursor-pointer min-w-[130px]"
+                    />
+                    <span className="text-slate-400 font-bold">-</span>
+                    <input 
+                        type="date" 
+                        value={endDate}
+                        onChange={(e) => handleDateChange(e, 'end')}
+                        onClick={handleSafePicker}
+                        className="w-full sm:w-auto bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm cursor-pointer min-w-[130px]"
+                    />
+                </div>
+            )}
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 z-10">
+        {kpis.map((kpi, idx) => {
+          const Icon = kpi.icon;
+          return (
+            <div 
+                key={idx} 
+                onClick={() => handleKpiClick(kpi)}
+                className={`bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-200 
+                    ${kpi.clickable ? 'cursor-pointer hover:shadow-md hover:border-emerald-200 active:scale-95' : 'hover:scale-105'}`}
+            >
+              <div className={`p-4 rounded-full ${kpi.bg}`}>
+                <Icon className={kpi.color} size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">{kpi.label}</p>
+                <h3 className="text-2xl font-bold text-slate-900 mt-1">{kpi.value}</h3>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 z-0">
+        
+        {/* Revenue vs Spend */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+          <div className="flex justify-between items-center mb-6">
+             <h3 className="text-lg font-semibold text-slate-800">Financial Performance</h3>
+             <span className="text-xs text-slate-400 font-medium bg-slate-100 px-2 py-1 rounded">Selected Range</span>
+          </div>
+          
+          {revenueData.length > 0 ? (
+            <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={revenueData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                    <Tooltip 
+                    formatter={(value: number) => `RM ${value.toLocaleString()}`}
+                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                    cursor={{fill: '#f1f5f9'}}
+                    />
+                    <Bar dataKey="spend" fill="#94a3b8" radius={[4, 4, 0, 0]} name="Spend (In Range)" />
+                    <Bar dataKey="revenue" fill="#059669" radius={[4, 4, 0, 0]} name="Total Revenue" />
+                </BarChart>
+                </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-slate-400 flex-col gap-2">
+                <Filter size={32} className="opacity-20"/>
+                <p>No campaigns found in selected range</p>
+            </div>
+          )}
+        </div>
+
+        {/* Platform Distribution */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+          <h3 className="text-lg font-semibold text-slate-800 mb-6">Marketing Channels (In Range)</h3>
+          {platformData.length > 0 ? (
+              <>
+                <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                        data={platformData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                        >
+                        {platformData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                        </Pie>
+                        <Tooltip />
+                    </PieChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap justify-center gap-4 mt-4">
+                    {platformData.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{backgroundColor: COLORS[index % COLORS.length]}}></div>
+                        <span className="text-xs text-slate-600 font-medium">{entry.name}</span>
+                    </div>
+                    ))}
+                </div>
+              </>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-slate-400 flex-col gap-2">
+                <Calendar size={32} className="opacity-20"/>
+                <p>No plans scheduled in selected range</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* KPI Details Modal */}
+      {kpiModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fadeIn flex flex-col max-h-[80vh]">
+                  <div className="bg-slate-900 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                      <h3 className="text-lg font-bold text-white">{kpiModal.title}</h3>
+                      <button onClick={() => setKpiModal(null)} className="text-slate-400 hover:text-white"><X size={20}/></button>
+                  </div>
+                  <div className="overflow-y-auto p-4 space-y-3">
+                      {kpiModal.items.map((item, i) => (
+                          <div 
+                            key={i} 
+                            onClick={() => handleNavigateToPlan(item.campaignId)}
+                            className="p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer group flex justify-between items-center"
+                          >
+                              <div>
+                                  <p className="font-semibold text-slate-800">{item.plan.title}</p>
+                                  <p className="text-xs text-slate-500">{item.campaignName} • {item.plan.scheduledDate}</p>
+                              </div>
+                              <div className="text-right flex items-center gap-3">
+                                  <div>
+                                      <span className="block text-[10px] text-slate-400 uppercase">Cost</span>
+                                      <span className="font-bold text-slate-700">RM {item.plan.cost.toLocaleString()}</span>
+                                  </div>
+                                  <ArrowRight size={16} className="text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
+    </div>
+  );
+};
+
+export default Dashboard;
+
+
+---------------------------------
+FILE NAME: Login.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\pages\Login.tsx
+---------------------------------
+import React, { useState } from 'react';
+import { authenticate } from '../services/storage';
+import { User } from '../types';
+import { KeyRound, User as UserIcon, Mountain } from 'lucide-react';
+
+interface LoginProps {
+  onLogin: (user: User) => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const user = await authenticate(username, password);
+      if (user) {
+        onLogin(user);
+      } else {
+        setError('Invalid username or password');
+      }
+    } catch (err) {
+      setError('Connection failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+        
+        {/* Header Section */}
+        <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
+           {/* Decorative background element */}
+           <div className="absolute top-0 left-0 w-full h-full opacity-10">
+              <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                 <path d="M0 100 C 20 0 50 0 100 100 Z" fill="white" />
+              </svg>
+           </div>
+           
+           <div className="relative z-10 flex flex-col items-center">
+             <div className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-emerald-900/50">
+               <Mountain className="text-white w-8 h-8" />
+             </div>
+             <h1 className="text-2xl font-bold text-white tracking-tight">GGPH SMMS</h1>
+             <p className="text-slate-400 text-sm mt-1">Sales and Marketing Management System</p>
+           </div>
+        </div>
+
+        {/* Form Section */}
+        <div className="p-8">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-100 text-center animate-fadeIn">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5 ml-1">Username</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <UserIcon size={18} className="text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors bg-slate-50 focus:bg-white text-slate-900 placeholder-slate-400"
+                  placeholder="e.g. admin"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5 ml-1">Password</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <KeyRound size={18} className="text-slate-400" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors bg-slate-50 focus:bg-white text-slate-900 placeholder-slate-400"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all ${
+                loading ? 'opacity-75 cursor-not-allowed' : ''
+              }`}
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+        </div>
+        
+        <div className="px-8 pb-6 text-center">
+            <p className="text-xs text-slate-400">© 2024 Gopeng Glamping Park</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
+
+
+---------------------------------
+FILE NAME: storage.ts
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\services\storage.ts
+---------------------------------
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, collection, getDocs, addDoc, updateDoc, 
+  deleteDoc, doc, query, where, getDoc
+} from 'firebase/firestore';
+import { User, Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventType } from '../types';
+
+// --- Safe Env Access (Vite Compatible) ---
+const getEnv = (key: string) => {
+  // Check for Vite environment variables
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env[key];
+  }
+  // Fallback for other environments
+  try {
+    // @ts-ignore
+    return (typeof process !== 'undefined' && process.env) ? process.env[key] : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// --- Configuration ---
+// Updated with your provided credentials
+const firebaseConfig = {
+  apiKey: getEnv('VITE_API_KEY') || "AIzaSyCddm09CHHiiV-246mNmJJpapwcEt2LISc",
+  authDomain: "smms-3188e.firebaseapp.com",
+  projectId: "smms-3188e",
+  storageBucket: "smms-3188e.firebasestorage.app",
+  messagingSenderId: "466656264824",
+  appId: "1:466656264824:web:13744546d3a3180728638d"
+};
+
+// Logic: Use Mock Mode ONLY if explicitly set in environment, otherwise default to Real Firebase
+const FORCE_MOCK = getEnv('VITE_USE_MOCK') === 'true';
+
+// Initialize Firebase
+let app, db: any;
+let IS_DEMO = false;
+
+if (FORCE_MOCK) {
+  IS_DEMO = true;
+} else {
+  try {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    console.log("Firebase initialized with project:", firebaseConfig.projectId);
+  } catch (e) {
+    console.error("Firebase Init Error - Falling back to Mock Mode:", e);
+    IS_DEMO = true;
+  }
+}
+
+// Collection Names
+const COLLECTIONS = {
+  USERS: 'users',
+  CAMPAIGNS: 'campaigns',
+  BRANCHES: 'branches',
+  CATEGORIES: 'categories',
+  EVENT_TYPES: 'event_types',
+};
+
+// --- Mock Data Helpers (LocalStorage) ---
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const getMockData = <T>(key: string): T[] => {
+  try {
+    const data = localStorage.getItem(`mock_${key}`);
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    console.error(`Error parsing mock data for ${key}`, e);
+    return [];
+  }
+};
+
+const setMockData = (key: string, data: any[]) => {
+  try {
+    localStorage.setItem(`mock_${key}`, JSON.stringify(data));
+  } catch (e) {
+    console.error(`Error saving mock data for ${key}`, e);
+  }
+};
+
+// --- Seed Data (Used for both Mock and Initial Firebase Seeding) ---
+const getCurrentYear = () => new Date().getFullYear();
+const Y = getCurrentYear();
+
+const SEED_USERS: User[] = [
+  { id: '1', username: 'admin', password: '123', role: 'Admin', name: 'System Admin' },
+  { id: '2', username: 'staff', password: '123', role: 'Staff', name: 'Sarah Marketing' },
+];
+
+const SEED_BRANCHES: Branch[] = [
+  { id: 'b1', name: 'Gopeng Glamping Park', location: 'Gopeng, Perak' },
+  { id: 'b2', name: 'Ipoh Heritage Stay', location: 'Ipoh, Perak' },
+];
+
+const SEED_CATEGORIES: Category[] = [
+  { id: 'cat1', name: 'Seasonal Promo' },
+  { id: 'cat2', name: 'Brand Awareness' },
+  { id: 'cat3', name: 'Membership Drive' },
+];
+
+const SEED_EVENT_TYPES: EventType[] = [
+  { id: 'evt1', name: 'Glamping' },
+  { id: 'evt2', name: 'Dining / F&B' },
+  { id: 'evt3', name: 'Team Building' },
+  { id: 'evt4', name: 'Special Event' },
+];
+
+const SEED_CAMPAIGNS: Campaign[] = [
+  {
+    id: 'c1',
+    branchId: 'b1',
+    categoryId: 'cat3',
+    eventTypeId: 'evt1',
+    name: 'Tribe Membership Launch',
+    startDate: `${Y}-05-01`,
+    endDate: `${Y}-06-30`,
+    status: 'Active',
+    targetRevenue: 20000,
+    actualRevenue: 12500,
+    description: 'Launch of the new loyalty program for repeat campers.',
+    poster: '',
+    plans: [
+      { id: 'p1', title: 'Teaser Video', platform: ['TikTok'], scheduledDate: `${Y}-05-02`, status: 'Published', budget: 300, cost: 200 },
+      { id: 'p2', title: 'Early Bird Email', platform: ['Email'], scheduledDate: `${Y}-05-05`, status: 'Published', budget: 50, cost: 50 },
+      { id: 'p3', title: 'Influencer Collab', platform: ['Instagram', 'TikTok'], scheduledDate: `${Y}-05-15`, status: 'Scheduled', budget: 2000, cost: 1500 },
+    ]
+  },
+  {
+    id: 'c2',
+    branchId: 'b1',
+    categoryId: 'cat1',
+    eventTypeId: 'evt2',
+    name: 'Ramadan Promo',
+    startDate: `${Y}-03-10`,
+    endDate: `${Y}-04-10`,
+    status: 'Completed',
+    targetRevenue: 15000,
+    actualRevenue: 8900,
+    description: 'Special Iftar and Sahur packages.',
+    poster: '',
+    plans: [
+      { id: 'p4', title: 'Menu Reveal', platform: ['Facebook'], scheduledDate: `${Y}-03-01`, status: 'Published', budget: 150, cost: 100 },
+    ]
+  }
+];
+
+// --- Initialization ---
+export const initDatabase = async () => {
+  if (IS_DEMO) {
+    console.warn("RUNNING IN MOCK MODE: Using LocalStorage simulation.");
+    await delay(500);
+    if (getMockData(COLLECTIONS.USERS).length === 0) setMockData(COLLECTIONS.USERS, SEED_USERS);
+    if (getMockData(COLLECTIONS.BRANCHES).length === 0) setMockData(COLLECTIONS.BRANCHES, SEED_BRANCHES);
+    if (getMockData(COLLECTIONS.CATEGORIES).length === 0) setMockData(COLLECTIONS.CATEGORIES, SEED_CATEGORIES);
+    if (getMockData(COLLECTIONS.EVENT_TYPES).length === 0) setMockData(COLLECTIONS.EVENT_TYPES, SEED_EVENT_TYPES);
+    if (getMockData(COLLECTIONS.CAMPAIGNS).length === 0) setMockData(COLLECTIONS.CAMPAIGNS, SEED_CAMPAIGNS);
+    return;
+  }
+
+  try {
+    const isCollectionEmpty = async (colName: string) => {
+      const q = query(collection(db, colName));
+      const snapshot = await getDocs(q);
+      return snapshot.empty;
+    };
+
+    // Auto-seed Users if empty
+    if (await isCollectionEmpty(COLLECTIONS.USERS)) {
+       console.log("Seeding Users...");
+       for (const u of SEED_USERS) { const {id, ...data} = u; await addDoc(collection(db, COLLECTIONS.USERS), data); }
+    }
+    // Auto-seed Branches if empty
+    if (await isCollectionEmpty(COLLECTIONS.BRANCHES)) {
+       console.log("Seeding Branches...");
+       for (const b of SEED_BRANCHES) { const {id, ...data} = b; await addDoc(collection(db, COLLECTIONS.BRANCHES), data); }
+    }
+     // Auto-seed Categories if empty
+    if (await isCollectionEmpty(COLLECTIONS.CATEGORIES)) {
+       console.log("Seeding Categories...");
+       for (const c of SEED_CATEGORIES) { const {id, ...data} = c; await addDoc(collection(db, COLLECTIONS.CATEGORIES), data); }
+    }
+    // Auto-seed Event Types if empty
+    if (await isCollectionEmpty(COLLECTIONS.EVENT_TYPES)) {
+       console.log("Seeding Event Types...");
+       for (const e of SEED_EVENT_TYPES) { const {id, ...data} = e; await addDoc(collection(db, COLLECTIONS.EVENT_TYPES), data); }
+    }
+     // Auto-seed Campaigns if empty
+    if (await isCollectionEmpty(COLLECTIONS.CAMPAIGNS)) {
+       console.log("Seeding Campaigns...");
+       for (const c of SEED_CAMPAIGNS) { const {id, ...data} = c; await addDoc(collection(db, COLLECTIONS.CAMPAIGNS), data); }
+    }
+
+    console.log('Firebase Database initialized & seeded if empty.');
+  } catch (e) {
+    console.error("Error seeding database:", e);
+  }
+};
+
+// --- Helper to snapshot to array ---
+const snapToData = <T>(snap: any): T[] => {
+    return snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as T[];
+};
+
+// --- Users ---
+export const getUsers = async (): Promise<User[]> => {
+  if (IS_DEMO) { await delay(200); return getMockData<User>(COLLECTIONS.USERS); }
+  const snap = await getDocs(collection(db, COLLECTIONS.USERS));
+  return snapToData<User>(snap);
+};
+
+export const addUser = async (user: Omit<User, 'id'>): Promise<User> => {
+  if (IS_DEMO) { 
+    await delay(300); 
+    const users = getMockData<User>(COLLECTIONS.USERS);
+    const newUser = { id: Date.now().toString(), ...user };
+    setMockData(COLLECTIONS.USERS, [...users, newUser]);
+    return newUser;
+  }
+  const docRef = await addDoc(collection(db, COLLECTIONS.USERS), user);
+  return { id: docRef.id, ...user };
+};
+
+export const updateUser = async (user: User): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const users = getMockData<User>(COLLECTIONS.USERS);
+    const index = users.findIndex(u => u.id === user.id);
+    if (index !== -1) {
+        users[index] = user;
+        setMockData(COLLECTIONS.USERS, users);
+    }
+    return;
+  }
+  const { id, ...data } = user;
+  const docRef = doc(db, COLLECTIONS.USERS, id);
+  await updateDoc(docRef, data as any);
+};
+
+export const deleteUser = async (id: string): Promise<void> => {
+  if (IS_DEMO) { 
+    await delay(300);
+    const users = getMockData<User>(COLLECTIONS.USERS);
+    setMockData(COLLECTIONS.USERS, users.filter(u => u.id !== id));
+    return;
+  }
+  await deleteDoc(doc(db, COLLECTIONS.USERS, id));
+};
+
+// --- Branches ---
+export const getBranches = async (): Promise<Branch[]> => {
+  if (IS_DEMO) { await delay(200); return getMockData<Branch>(COLLECTIONS.BRANCHES); }
+  const snap = await getDocs(collection(db, COLLECTIONS.BRANCHES));
+  return snapToData<Branch>(snap);
+};
+
+export const addBranch = async (branch: Omit<Branch, 'id'>): Promise<Branch> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<Branch>(COLLECTIONS.BRANCHES);
+    const newItem = { id: `b${Date.now()}`, ...branch };
+    setMockData(COLLECTIONS.BRANCHES, [...list, newItem]);
+    return newItem;
+  }
+  const docRef = await addDoc(collection(db, COLLECTIONS.BRANCHES), branch);
+  return { id: docRef.id, ...branch };
+};
+
+export const updateBranch = async (branch: Branch): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const branches = getMockData<Branch>(COLLECTIONS.BRANCHES);
+    const index = branches.findIndex(b => b.id === branch.id);
+    if (index !== -1) {
+        branches[index] = branch;
+        setMockData(COLLECTIONS.BRANCHES, branches);
+    }
+    return;
+  }
+  const { id, ...data } = branch;
+  const docRef = doc(db, COLLECTIONS.BRANCHES, id);
+  await updateDoc(docRef, data as any);
+};
+
+// --- Categories ---
+export const getCategories = async (): Promise<Category[]> => {
+  if (IS_DEMO) { await delay(200); return getMockData<Category>(COLLECTIONS.CATEGORIES); }
+  const snap = await getDocs(collection(db, COLLECTIONS.CATEGORIES));
+  return snapToData<Category>(snap);
+};
+
+export const addCategory = async (name: string): Promise<Category> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<Category>(COLLECTIONS.CATEGORIES);
+    const newItem = { id: `cat${Date.now()}`, name };
+    setMockData(COLLECTIONS.CATEGORIES, [...list, newItem]);
+    return newItem;
+  }
+  const docRef = await addDoc(collection(db, COLLECTIONS.CATEGORIES), { name });
+  return { id: docRef.id, name };
+};
+
+export const updateCategory = async (category: Category): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const categories = getMockData<Category>(COLLECTIONS.CATEGORIES);
+    const index = categories.findIndex(c => c.id === category.id);
+    if (index !== -1) {
+        categories[index] = category;
+        setMockData(COLLECTIONS.CATEGORIES, categories);
+    }
+    return;
+  }
+  const { id, ...data } = category;
+  const docRef = doc(db, COLLECTIONS.CATEGORIES, id);
+  await updateDoc(docRef, data as any);
+};
+
+export const deleteCategory = async (id: string): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(200);
+    const list = getMockData<Category>(COLLECTIONS.CATEGORIES);
+    setMockData(COLLECTIONS.CATEGORIES, list.filter(i => i.id !== id));
+    return;
+  }
+  await deleteDoc(doc(db, COLLECTIONS.CATEGORIES, id));
+};
+
+// --- Event Types ---
+export const getEventTypes = async (): Promise<EventType[]> => {
+  if (IS_DEMO) { await delay(200); return getMockData<EventType>(COLLECTIONS.EVENT_TYPES); }
+  const snap = await getDocs(collection(db, COLLECTIONS.EVENT_TYPES));
+  return snapToData<EventType>(snap);
+};
+
+export const addEventType = async (name: string): Promise<EventType> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<EventType>(COLLECTIONS.EVENT_TYPES);
+    const newItem = { id: `evt${Date.now()}`, name };
+    setMockData(COLLECTIONS.EVENT_TYPES, [...list, newItem]);
+    return newItem;
+  }
+  const docRef = await addDoc(collection(db, COLLECTIONS.EVENT_TYPES), { name });
+  return { id: docRef.id, name };
+};
+
+export const updateEventType = async (eventType: EventType): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<EventType>(COLLECTIONS.EVENT_TYPES);
+    const index = list.findIndex(e => e.id === eventType.id);
+    if (index !== -1) {
+        list[index] = eventType;
+        setMockData(COLLECTIONS.EVENT_TYPES, list);
+    }
+    return;
+  }
+  const { id, ...data } = eventType;
+  const docRef = doc(db, COLLECTIONS.EVENT_TYPES, id);
+  await updateDoc(docRef, data as any);
+};
+
+export const deleteEventType = async (id: string): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(200);
+    const list = getMockData<EventType>(COLLECTIONS.EVENT_TYPES);
+    setMockData(COLLECTIONS.EVENT_TYPES, list.filter(i => i.id !== id));
+    return;
+  }
+  await deleteDoc(doc(db, COLLECTIONS.EVENT_TYPES, id));
+};
+
+// --- Campaigns ---
+export const getCampaigns = async (): Promise<Campaign[]> => {
+  if (IS_DEMO) { await delay(400); return getMockData<Campaign>(COLLECTIONS.CAMPAIGNS); }
+  const snap = await getDocs(collection(db, COLLECTIONS.CAMPAIGNS));
+  return snapToData<Campaign>(snap);
+};
+
+export const addCampaign = async (campaign: Campaign): Promise<Campaign> => {
+  if (IS_DEMO) {
+    await delay(400);
+    const list = getMockData<Campaign>(COLLECTIONS.CAMPAIGNS);
+    const newItem = { ...campaign, id: `c${Date.now()}` };
+    setMockData(COLLECTIONS.CAMPAIGNS, [...list, newItem]);
+    return newItem;
+  }
+  const { id, ...data } = campaign; 
+  const docRef = await addDoc(collection(db, COLLECTIONS.CAMPAIGNS), data);
+  return { ...campaign, id: docRef.id };
+};
+
+export const updateCampaign = async (campaign: Campaign): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<Campaign>(COLLECTIONS.CAMPAIGNS);
+    const idx = list.findIndex(c => c.id === campaign.id);
+    if(idx !== -1) {
+        list[idx] = campaign;
+        setMockData(COLLECTIONS.CAMPAIGNS, list);
+    }
+    return;
+  }
+  const { id, ...data } = campaign;
+  const docRef = doc(db, COLLECTIONS.CAMPAIGNS, id);
+  await updateDoc(docRef, data as any);
+};
+
+export const updateCampaignStatus = async (campaignId: string, status: CampaignStatus): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(200);
+    const list = getMockData<Campaign>(COLLECTIONS.CAMPAIGNS);
+    const item = list.find(c => c.id === campaignId);
+    if(item) {
+        item.status = status;
+        setMockData(COLLECTIONS.CAMPAIGNS, list);
+    }
+    return;
+  }
+  const docRef = doc(db, COLLECTIONS.CAMPAIGNS, campaignId);
+  await updateDoc(docRef, { status });
+};
+
+// --- Marketing Plans (Sub-items management) ---
+
+export const addMarketingPlan = async (campaignId: string, plan: MarketingPlan): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<Campaign>(COLLECTIONS.CAMPAIGNS);
+    const item = list.find(c => c.id === campaignId);
+    if(item) {
+        item.plans = [...(item.plans || []), plan];
+        setMockData(COLLECTIONS.CAMPAIGNS, list);
+    }
+    return;
+  }
+  const docRef = doc(db, COLLECTIONS.CAMPAIGNS, campaignId);
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+      const camp = snap.data() as Campaign;
+      const newPlans = [...(camp.plans || []), plan];
+      await updateDoc(docRef, { plans: newPlans });
+  }
+};
+
+export const updateMarketingPlan = async (campaignId: string, updatedPlan: MarketingPlan): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<Campaign>(COLLECTIONS.CAMPAIGNS);
+    const item = list.find(c => c.id === campaignId);
+    if(item) {
+        item.plans = item.plans.map(p => p.id === updatedPlan.id ? updatedPlan : p);
+        setMockData(COLLECTIONS.CAMPAIGNS, list);
+    }
+    return;
+  }
+  const docRef = doc(db, COLLECTIONS.CAMPAIGNS, campaignId);
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+      const camp = snap.data() as Campaign;
+      const newPlans = camp.plans.map(p => p.id === updatedPlan.id ? updatedPlan : p);
+      await updateDoc(docRef, { plans: newPlans });
+  }
+};
+
+export const deleteMarketingPlan = async (campaignId: string, planId: string): Promise<void> => {
+    if (IS_DEMO) {
+        await delay(300);
+        const list = getMockData<Campaign>(COLLECTIONS.CAMPAIGNS);
+        const item = list.find(c => c.id === campaignId);
+        if(item) {
+            item.plans = item.plans.filter(p => p.id !== planId);
+            setMockData(COLLECTIONS.CAMPAIGNS, list);
+        }
+        return;
+    }
+    const docRef = doc(db, COLLECTIONS.CAMPAIGNS, campaignId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+        const camp = snap.data() as Campaign;
+        const newPlans = camp.plans.filter(p => p.id !== planId);
+        await updateDoc(docRef, { plans: newPlans });
+    }
+};
+
+// --- Auth ---
+export const authenticate = async (username: string, password: string): Promise<User | undefined> => {
+  if (IS_DEMO) {
+    await delay(500);
+    const users = getMockData<User>(COLLECTIONS.USERS);
+    return users.find(u => u.username === username && u.password === password);
+  }
+  
+  try {
+    const q = query(
+        collection(db, COLLECTIONS.USERS), 
+        where("username", "==", username),
+        where("password", "==", password)
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+        const d = snap.docs[0];
+        return { id: d.id, ...d.data() } as User;
+    }
+  } catch (e) {
+      console.error("Auth error:", e);
+      // Fallback for first login if DB is empty
+      if (username === 'admin' && password === '123') {
+          return SEED_USERS[0];
+      }
+  }
+  return undefined;
+};
+
+
+---------------------------------
+FILE NAME: App.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\App.tsx
+---------------------------------
+import React, { useState, useEffect } from 'react';
+import { User } from './types';
+import { initDatabase } from './services/storage';
+import Login from './pages/Login';
+import Layout from './components/Layout';
+import Dashboard from './pages/Dashboard';
+import Campaigns from './pages/Campaigns';
+import CalendarView from './pages/Calendar';
+import Admin from './pages/Admin';
+
+const App: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [viewParams, setViewParams] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    const initialize = async () => {
+      // Safety timeout: If DB takes too long, just stop loading to show error or login
+      const timeoutId = setTimeout(() => {
+        if (isMounted && isLoading) {
+          console.warn("Database initialization timed out. Proceeding...");
+          setIsLoading(false);
+        }
+      }, 5000);
+
+      try {
+        // 1. Initialize Seed Data (Async check)
+        await initDatabase();
+
+        // 2. Check for existing session
+        const storedUser = localStorage.getItem('smtms_session');
+        if (storedUser && isMounted) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (error) {
+        console.error("Initialization failed:", error);
+      } finally {
+        clearTimeout(timeoutId);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    initialize();
+    
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleLogin = (loggedInUser: User) => {
+    setUser(loggedInUser);
+    localStorage.setItem('smtms_session', JSON.stringify(loggedInUser));
+    setCurrentView('dashboard');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('smtms_session');
+    setCurrentView('dashboard');
+    setViewParams(null);
+  };
+
+  const handleNavigate = (view: string, params?: any) => {
+    setCurrentView(view);
+    if (params) {
+      setViewParams(params);
+    } else {
+      setViewParams(null);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="loader mb-4"></div>
+        <p className="text-slate-500 text-sm animate-pulse">Initializing Database...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  // Router Switch
+  const renderView = () => {
+    switch (currentView) {
+      case 'dashboard': 
+        return <Dashboard onNavigate={handleNavigate} />;
+      case 'campaigns': 
+        return <Campaigns initialExpandedId={viewParams?.campaignId} />;
+      case 'calendar': 
+        return <CalendarView onNavigate={handleNavigate} />;
+      case 'admin': 
+        return user.role === 'Admin' ? <Admin /> : <Dashboard onNavigate={handleNavigate} />;
+      default: 
+        return <Dashboard onNavigate={handleNavigate} />;
+    }
+  };
+
+  return (
+    <Layout 
+      user={user} 
+      currentView={currentView} 
+      onNavigate={handleNavigate}
+      onLogout={handleLogout}
+    >
+      {renderView()}
+    </Layout>
+  );
+};
+
+export default App;
+
+
+---------------------------------
+FILE NAME: index.html
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\index.html
+---------------------------------
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="https://lucide.dev/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GGPH SMMS</title>
+    <!-- We keep Tailwind CDN for simplicity, but in a real build you might import it in CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+       /* Custom scrollbar */
+       ::-webkit-scrollbar {
+         width: 8px;
+         height: 8px;
+       }
+       ::-webkit-scrollbar-track {
+         background: #f1f5f9; 
+       }
+       ::-webkit-scrollbar-thumb {
+         background: #cbd5e1; 
+         border-radius: 4px;
+       }
+       ::-webkit-scrollbar-thumb:hover {
+         background: #94a3b8; 
+       }
+       
+       @keyframes fadeIn {
+         from { opacity: 0; transform: translateY(10px); }
+         to { opacity: 1; transform: translateY(0); }
+       }
+       .animate-fadeIn {
+         animation: fadeIn 0.3s ease-out forwards;
+       }
+       
+       /* Spinner */
+       .loader {
+          border: 3px solid #f3f3f3;
+          border-radius: 50%;
+          border-top: 3px solid #059669;
+          width: 24px;
+          height: 24px;
+          -webkit-animation: spin 1s linear infinite; /* Safari */
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-900 antialiased">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
+
+
+---------------------------------
+FILE NAME: index.tsx
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\index.tsx
+---------------------------------
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+
+---------------------------------
+FILE NAME: types.ts
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\types.ts
+---------------------------------
+export type Role = 'Admin' | 'Staff';
+
+export interface User {
+  id: string;
+  username: string;
+  password?: string;
+  role: Role;
+  name: string;
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  location: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+export interface EventType {
+  id: string;
+  name: string;
+}
+
+export type CampaignStatus = 'Planning' | 'Active' | 'Completed' | 'On Hold' | 'Cancelled';
+
+export interface MarketingPlan {
+  id: string;
+  title: string;
+  description?: string; // Added description field
+  platform: string[];
+  scheduledDate: string; // ISO Date string YYYY-MM-DD
+  status: 'Draft' | 'Scheduled' | 'Published' | 'Cancelled';
+  budget: number;
+  cost: number;
+}
+
+export interface Campaign {
+  id: string;
+  branchId: string;
+  categoryId?: string;
+  eventTypeId?: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: CampaignStatus;
+  targetRevenue: number;
+  actualRevenue: number;
+  description: string;
+  poster?: string;
+  plans: MarketingPlan[];
+}
+
+export interface KPI {
+  label: string;
+  value: string;
+  trend: number;
+  trendUp: boolean;
+  icon: any; // React component type
+  bg: string;
+  color: string;
+  clickable: boolean;
+  items?: any[];
+}
+
+
+---------------------------------
+FILE NAME: vite.config.ts
+PATH: C:\Users\Shahrul\Desktop\SMMS\V3\vite.config.ts
+---------------------------------
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react()],
+})
+
+
