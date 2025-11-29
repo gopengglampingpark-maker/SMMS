@@ -41,8 +41,10 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   const [isEditCamp, setIsEditCamp] = useState(false);
   const [editingCampId, setEditingCampId] = useState<string | null>(null);
 
-  // View Plan Detail Modal State
+  // New View States for Popups
   const [viewPlan, setViewPlan] = useState<{plan: MarketingPlan, campaignName: string} | null>(null);
+  const [viewImage, setViewImage] = useState<string | null>(null); // For Full Size Poster
+  const [viewDescription, setViewDescription] = useState<string | null>(null); // For Full Description
 
   // Campaign Form Data
   const [campName, setCampName] = useState('');
@@ -127,7 +129,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     if (confirm("Are you sure you want to delete this Marketing Plan?")) {
         await deleteMarketingPlan(campaignId, planId);
         refreshData();
-        // If we are viewing the deleted plan, close the modal
         if (viewPlan?.plan.id === planId) setViewPlan(null);
     }
   };
@@ -148,7 +149,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     const nextStatus = statuses[nextIndex];
     await updateMarketingPlan(campaignId, { ...plan, status: nextStatus });
     refreshData();
-    // Update view modal if open
     if (viewPlan?.plan.id === plan.id) {
         setViewPlan({ ...viewPlan, plan: { ...plan, status: nextStatus } });
     }
@@ -163,6 +163,10 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleRemoveImage = () => {
+      setCampImage('');
   };
 
   // --- Campaign Handlers ---
@@ -240,7 +244,7 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   };
 
   const openEditPlanModal = (e: React.MouseEvent, campaignId: string, plan: MarketingPlan) => {
-    e.stopPropagation(); // Prevent opening view modal
+    e.stopPropagation();
     setPlanTitle(plan.title);
     setPlanDesc(plan.description || '');
     setPlanPlatforms(plan.platform);
@@ -278,7 +282,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     refreshData();
     setShowPlanModal(null);
     resetPlanForm();
-    // Update view modal if open
     if (viewPlan && isEditPlan) {
         setViewPlan({ ...viewPlan, plan: { ...viewPlan.plan, ...planData, id: editingPlanId! } });
     }
@@ -464,13 +467,20 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                     {/* Left: Description & Poster */}
                     <div className="md:w-1/3 space-y-4">
                        {campaign.poster && (
-                         <div className="relative group rounded-lg overflow-hidden border border-slate-200">
-                           <img src={campaign.poster} alt="Campaign Poster" className="w-full h-48 object-cover" />
+                         <div 
+                            className="relative group rounded-lg overflow-hidden border border-slate-200 cursor-pointer"
+                            onClick={() => setViewImage(campaign.poster || null)}
+                         >
+                           <img src={campaign.poster} alt="Campaign Poster" className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-105" />
+                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium">Click to Enlarge</div>
                          </div>
                        )}
-                       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</h4>
-                         <p className="text-sm text-slate-600 italic">{campaign.description || "No description provided."}</p>
+                       <div 
+                            className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors group"
+                            onClick={() => setViewDescription(campaign.description)}
+                       >
+                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 group-hover:text-emerald-600">Description</h4>
+                         <p className="text-sm text-slate-600 italic line-clamp-3">{campaign.description || "No description provided."}</p>
                        </div>
                     </div>
 
@@ -563,7 +573,32 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
         )}
       </div>
 
-      {/* Plan Details View Modal (New Feature) */}
+      {/* --- POPUP: Full Size Poster --- */}
+      {viewImage && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-pointer" onClick={() => setViewImage(null)}>
+           <div className="relative max-w-4xl max-h-[90vh]" onClick={e => e.stopPropagation()}>
+              <img src={viewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+              <button onClick={() => setViewImage(null)} className="absolute -top-4 -right-4 bg-white text-black rounded-full p-2 shadow-lg hover:bg-gray-200"><X size={20}/></button>
+           </div>
+        </div>
+      )}
+
+      {/* --- POPUP: Full Description --- */}
+      {viewDescription && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 cursor-pointer" onClick={() => setViewDescription(null)}>
+           <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden cursor-default" onClick={e => e.stopPropagation()}>
+              <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
+                 <h3 className="text-lg font-bold text-white">Campaign Description</h3>
+                 <button onClick={() => setViewDescription(null)} className="text-slate-400 hover:text-white"><X size={20}/></button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[70vh]">
+                 <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{viewDescription}</p>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* --- POPUP: Plan Details --- */}
       {viewPlan && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setViewPlan(null)}>
            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn" onClick={e => e.stopPropagation()}>
@@ -675,8 +710,20 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Upload Poster (Image)</label>
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
-                  {campImage && <div className="mt-2 text-xs text-green-600 flex items-center gap-1"><CheckSquare size={12}/> Image loaded</div>}
+                  <div className="space-y-3">
+                      <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
+                      {campImage && (
+                          <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                              <img src={campImage} alt="Preview" className="w-16 h-16 object-cover rounded" />
+                              <div className="flex-1">
+                                  <p className="text-xs text-green-600 font-bold flex items-center gap-1"><CheckSquare size={12}/> Image Loaded</p>
+                              </div>
+                              <button type="button" onClick={handleRemoveImage} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors" title="Remove Image">
+                                  <Trash2 size={18} />
+                              </button>
+                          </div>
+                      )}
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t">
