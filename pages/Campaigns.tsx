@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   getCampaigns, getBranches, getCategories, getEventTypes,
-  updateCampaignStatus, addMarketingPlan, addCampaign, updateCampaign, updateMarketingPlan 
+  updateCampaignStatus, addMarketingPlan, addCampaign, updateCampaign, updateMarketingPlan, deleteCampaign, deleteMarketingPlan 
 } from '../services/storage';
 import { Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventType } from '../types';
-import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Tag, CheckSquare, CalendarDays } from 'lucide-react';
+import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Tag, CheckSquare, CalendarDays, Trash2, ExternalLink } from 'lucide-react';
 import { 
   parseISO, 
   isValid, 
@@ -29,20 +29,22 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   
-  // Date Filter States (Default to Current Year)
+  // Date Filter States
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  // Refs for scrolling
   const campaignRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
-  // --- Campaign Modal State ---
+  // --- Modal States ---
   const [showCampModal, setShowCampModal] = useState(false);
   const [isEditCamp, setIsEditCamp] = useState(false);
   const [editingCampId, setEditingCampId] = useState<string | null>(null);
-  
+
+  // View Plan Detail Modal State
+  const [viewPlan, setViewPlan] = useState<{plan: MarketingPlan, campaignName: string} | null>(null);
+
+  // Campaign Form Data
   const [campName, setCampName] = useState('');
   const [campStart, setCampStart] = useState('');
   const [campEnd, setCampEnd] = useState('');
@@ -52,15 +54,16 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   const [campTarget, setCampTarget] = useState('');
   const [campActualRev, setCampActualRev] = useState('');
   const [campDesc, setCampDesc] = useState('');
-  const [campImage, setCampImage] = useState(''); // Base64
+  const [campImage, setCampImage] = useState(''); 
 
-  // --- Plan Modal State ---
-  const [showPlanModal, setShowPlanModal] = useState<string | null>(null); // holds campaign ID
+  // Plan Modal State
+  const [showPlanModal, setShowPlanModal] = useState<string | null>(null); 
   const [isEditPlan, setIsEditPlan] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   
+  // Plan Form Data
   const [planTitle, setPlanTitle] = useState('');
-  const [planDesc, setPlanDesc] = useState(''); // New State
+  const [planDesc, setPlanDesc] = useState(''); 
   const [planPlatforms, setPlanPlatforms] = useState<string[]>([]);
   const [planCustomPlatform, setPlanCustomPlatform] = useState('');
   const [planDate, setPlanDate] = useState('');
@@ -69,19 +72,15 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   const [planStatus, setPlanStatus] = useState<'Draft' | 'Scheduled' | 'Published' | 'Cancelled'>('Draft');
 
   const COMMON_PLATFORMS = ['Facebook', 'Instagram', 'TikTok', 'Email', 'Google Ads', 'Offline'];
-
-  // Input Class for consistent styling (White background, dark text)
   const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none placeholder-slate-400";
 
   useEffect(() => {
     refreshData();
   }, []);
 
-  // Handle deep linking to specific campaign
   useEffect(() => {
     if (initialExpandedId && campaigns.length > 0) {
       setExpandedId(initialExpandedId);
-      // Wait for render then scroll
       setTimeout(() => {
         if (campaignRefs.current[initialExpandedId]) {
           campaignRefs.current[initialExpandedId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -114,6 +113,25 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  // --- Deletion Handlers ---
+  const handleDeleteCampaign = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (confirm("Are you sure you want to delete this Campaign? This action cannot be undone.")) {
+        await deleteCampaign(id);
+        refreshData();
+    }
+  };
+
+  const handleDeletePlan = async (e: React.MouseEvent, campaignId: string, planId: string) => {
+    e.stopPropagation();
+    if (confirm("Are you sure you want to delete this Marketing Plan?")) {
+        await deleteMarketingPlan(campaignId, planId);
+        refreshData();
+        // If we are viewing the deleted plan, close the modal
+        if (viewPlan?.plan.id === planId) setViewPlan(null);
+    }
+  };
+
   const handleStatusChange = async (e: React.MouseEvent, id: string, current: CampaignStatus) => {
     e.stopPropagation();
     const statuses: CampaignStatus[] = ['Planning', 'Active', 'Completed', 'On Hold', 'Cancelled'];
@@ -128,11 +146,12 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     const statuses: MarketingPlan['status'][] = ['Draft', 'Scheduled', 'Published', 'Cancelled'];
     const nextIndex = (statuses.indexOf(plan.status) + 1) % statuses.length;
     const nextStatus = statuses[nextIndex];
-    await updateMarketingPlan(campaignId, {
-        ...plan,
-        status: nextStatus
-    });
+    await updateMarketingPlan(campaignId, { ...plan, status: nextStatus });
     refreshData();
+    // Update view modal if open
+    if (viewPlan?.plan.id === plan.id) {
+        setViewPlan({ ...viewPlan, plan: { ...plan, status: nextStatus } });
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,7 +166,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   };
 
   // --- Campaign Handlers ---
-
   const openNewCampaignModal = () => {
     resetCampForm();
     setIsEditCamp(false);
@@ -189,18 +207,13 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     };
 
     if (isEditCamp && editingCampId) {
-        // Update existing
         const existing = campaigns.find(c => c.id === editingCampId);
         if (existing) {
-            await updateCampaign({
-                ...existing,
-                ...campData
-            });
+            await updateCampaign({ ...existing, ...campData });
         }
     } else {
-        // Create New
         await addCampaign({
-            id: '', // Generated by Firestore
+            id: '', 
             ...campData,
             status: 'Planning',
             plans: []
@@ -214,23 +227,22 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
 
   const resetCampForm = () => {
     setCampName(''); setCampStart(''); setCampEnd('');
-    setCampTarget(''); 
-    setCampActualRev('0'); setCampDesc(''); setCampImage(''); setCampBranch('');
+    setCampTarget(''); setCampActualRev('0'); setCampDesc(''); setCampImage(''); setCampBranch('');
     setCampCategory(''); setCampEvent('');
     setEditingCampId(null);
   };
 
   // --- Plan Handlers ---
-
   const openNewPlanModal = (campaignId: string) => {
     resetPlanForm();
     setIsEditPlan(false);
     setShowPlanModal(campaignId);
   };
 
-  const openEditPlanModal = (campaignId: string, plan: MarketingPlan) => {
+  const openEditPlanModal = (e: React.MouseEvent, campaignId: string, plan: MarketingPlan) => {
+    e.stopPropagation(); // Prevent opening view modal
     setPlanTitle(plan.title);
-    setPlanDesc(plan.description || ''); // Set Description
+    setPlanDesc(plan.description || '');
     setPlanPlatforms(plan.platform);
     setPlanDate(plan.scheduledDate);
     setPlanBudget(plan.budget.toString());
@@ -245,12 +257,11 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     e.preventDefault();
     if (!showPlanModal || !planTitle) return;
 
-    // Use default platform if none selected
     const finalPlatforms = planPlatforms.length > 0 ? planPlatforms : ['Offline'];
 
     const planData = {
         title: planTitle,
-        description: planDesc, // Save Description
+        description: planDesc,
         platform: finalPlatforms,
         scheduledDate: planDate,
         status: planStatus,
@@ -259,28 +270,23 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
     };
 
     if (isEditPlan && editingPlanId) {
-        await updateMarketingPlan(showPlanModal, {
-            id: editingPlanId,
-            ...planData
-        });
+        await updateMarketingPlan(showPlanModal, { id: editingPlanId, ...planData });
     } else {
-        await addMarketingPlan(showPlanModal, {
-            id: `p${Date.now()}`,
-            ...planData
-        });
+        await addMarketingPlan(showPlanModal, { id: `p${Date.now()}`, ...planData });
     }
 
     refreshData();
     setShowPlanModal(null);
     resetPlanForm();
+    // Update view modal if open
+    if (viewPlan && isEditPlan) {
+        setViewPlan({ ...viewPlan, plan: { ...viewPlan.plan, ...planData, id: editingPlanId! } });
+    }
   };
 
   const togglePlatform = (p: string) => {
-    if (planPlatforms.includes(p)) {
-        setPlanPlatforms(planPlatforms.filter(item => item !== p));
-    } else {
-        setPlanPlatforms([...planPlatforms, p]);
-    }
+    if (planPlatforms.includes(p)) setPlanPlatforms(planPlatforms.filter(item => item !== p));
+    else setPlanPlatforms([...planPlatforms, p]);
   };
 
   const addCustomPlatform = () => {
@@ -298,7 +304,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   };
 
   // --- Utils ---
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Active': return 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200';
@@ -320,51 +325,33 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
   };
 
   const filteredCampaigns = campaigns.filter(c => {
-    // 1. Basic Filters
     const branchMatch = selectedBranch === 'all' || c.branchId === selectedBranch;
     const categoryMatch = selectedCategory === 'all' || c.categoryId === selectedCategory;
-
-    // 2. Date Filter (Overlapping logic)
-    // If "All Years" is selected, we show all (effectively ignoring dates)
     if (selectedYear === 'all') return branchMatch && categoryMatch;
 
     const cStart = parseISO(c.startDate);
     const cEnd = parseISO(c.endDate);
-
-    // If invalid dates on campaign, hide it if filter is active
     if (!isValid(cStart) || !isValid(cEnd)) return false;
 
     const yearInt = parseInt(selectedYear);
     let filterStart, filterEnd;
-
     if (selectedMonth === 'all') {
-        // Whole Year Filter
         filterStart = startOfYear(new Date(yearInt, 0, 1));
         filterEnd = endOfYear(new Date(yearInt, 0, 1));
     } else {
-        // Specific Month Filter
         const monthInt = parseInt(selectedMonth);
         filterStart = startOfMonth(new Date(yearInt, monthInt, 1));
         filterEnd = endOfMonth(new Date(yearInt, monthInt, 1));
     }
-
-    // Check overlap: (StartA <= EndB) and (EndA >= StartB)
     const dateMatch = cStart <= filterEnd && cEnd >= filterStart;
     return branchMatch && categoryMatch && dateMatch;
   });
 
-  // Generate Year Options (Current +/- 2 years)
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June', 
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><div className="loader"></div></div>;
-  }
+  if (isLoading) return <div className="flex justify-center items-center h-full"><div className="loader"></div></div>;
 
   return (
     <div className="space-y-6">
@@ -376,63 +363,31 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
         </div>
         
         <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-          {/* Year Filter */}
             <div className="relative">
-                <select 
-                className={`${inputClass} w-full sm:w-auto font-medium`}
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-            >
-                <option value="all">All Years</option>
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
+                <select className={`${inputClass} w-full sm:w-auto font-medium`} value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+                    <option value="all">All Years</option>
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
             </div>
-
-            {/* Month Filter */}
             <div className="relative">
-                <select 
-                className={`${inputClass} w-full sm:w-auto font-medium disabled:opacity-50 disabled:bg-slate-50`}
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                disabled={selectedYear === 'all'}
-            >
-                <option value="all">All Months</option>
-                {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                <select className={`${inputClass} w-full sm:w-auto font-medium disabled:opacity-50 disabled:bg-slate-50`} value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={selectedYear === 'all'}>
+                    <option value="all">All Months</option>
+                    {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
                 </select>
             </div>
-
-          {/* Branch Filter */}
           <div className="relative">
-            <select 
-              className={`${inputClass} w-full sm:w-auto`}
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-            >
+            <select className={`${inputClass} w-full sm:w-auto`} value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)}>
               <option value="all">All Branches</option>
-              {branches.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
+              {branches.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}
             </select>
           </div>
-
-          {/* Category Filter */}
           <div className="relative">
-            <select 
-              className={`${inputClass} w-full sm:w-auto`}
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-            >
+            <select className={`${inputClass} w-full sm:w-auto`} value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
               <option value="all">All Categories</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
           </div>
-          
-          <button 
-            onClick={openNewCampaignModal}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2 justify-center sm:justify-start"
-          >
+          <button onClick={openNewCampaignModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2 justify-center sm:justify-start">
             <Plus size={18} /> New Campaign
           </button>
         </div>
@@ -443,7 +398,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
         {filteredCampaigns.map((campaign) => {
           const totalBudget = (campaign.plans || []).reduce((acc, p) => acc + (p.budget || 0), 0);
           const totalActualCost = (campaign.plans || []).reduce((acc, p) => acc + (p.cost || 0), 0);
-
           const catName = categories.find(c => c.id === campaign.categoryId)?.name;
           const evtName = eventTypes.find(e => e.id === campaign.eventTypeId)?.name;
 
@@ -451,32 +405,21 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
             <div 
                 key={campaign.id} 
                 ref={(el) => { campaignRefs.current[campaign.id] = el; }}
-                className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all duration-300
-                    ${expandedId === campaign.id ? 'ring-2 ring-emerald-500 border-emerald-500' : 'border-slate-200'}
-                `}
+                className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all duration-300 ${expandedId === campaign.id ? 'ring-2 ring-emerald-500 border-emerald-500' : 'border-slate-200'}`}
             >
               {/* Header Row */}
-              <div 
-                className="p-5 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-slate-50 relative group"
-                onClick={() => toggleExpand(campaign.id)}
-              >
+              <div className="p-5 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-slate-50 relative group" onClick={() => toggleExpand(campaign.id)}>
                 <div className="flex-1 min-w-0 mb-4 md:mb-0 flex gap-4">
                    {campaign.poster ? (
                      <img src={campaign.poster} alt="Poster" className="w-16 h-16 rounded-md object-cover border border-slate-100 hidden sm:block" />
                    ) : (
-                     <div className="w-16 h-16 rounded-md bg-slate-100 flex items-center justify-center text-slate-300 hidden sm:flex">
-                       <ImageIcon size={24} />
-                     </div>
+                     <div className="w-16 h-16 rounded-md bg-slate-100 flex items-center justify-center text-slate-300 hidden sm:flex"><ImageIcon size={24} /></div>
                    )}
                    
                    <div>
                       <div className="flex items-center gap-3 mb-1">
                         <h3 className="text-lg font-bold text-slate-900 truncate">{campaign.name}</h3>
-                        <button 
-                          onClick={(e) => handleStatusChange(e, campaign.id, campaign.status)}
-                          className={`text-xs px-2.5 py-0.5 rounded-full border font-medium transition-colors ${getStatusColor(campaign.status)}`}
-                          title="Click to change status"
-                        >
+                        <button onClick={(e) => handleStatusChange(e, campaign.id, campaign.status)} className={`text-xs px-2.5 py-0.5 rounded-full border font-medium transition-colors ${getStatusColor(campaign.status)}`} title="Click to change status">
                           {campaign.status}
                         </button>
                       </div>
@@ -485,8 +428,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                         <span className="text-xs text-slate-400 hidden sm:inline">|</span>
                         <span className="text-slate-600">{branches.find(b => b.id === campaign.branchId)?.name || 'Unknown Branch'}</span>
                       </div>
-                      
-                      {/* Tags */}
                       <div className="flex flex-wrap gap-2 mt-2">
                         {catName && <span className="text-[10px] px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded-full flex items-center gap-1"><Tag size={10}/> {catName}</span>}
                         {evtName && <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-full flex items-center gap-1"><CalendarDays size={10}/> {evtName}</span>}
@@ -504,16 +445,13 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                       <span className="font-bold text-slate-700">RM {campaign.targetRevenue.toLocaleString()} / <span className="text-emerald-600">{campaign.actualRevenue.toLocaleString()}</span></span>
                    </div>
                    
-                   <div className="flex items-center gap-3">
-                       {/* Edit Button - only visible on hover or mobile */}
-                        <button 
-                            onClick={(e) => openEditCampaignModal(e, campaign)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors md:opacity-0 group-hover:opacity-100"
-                            title="Edit Campaign"
-                        >
+                   <div className="flex items-center gap-2">
+                        <button onClick={(e) => openEditCampaignModal(e, campaign)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors md:opacity-0 group-hover:opacity-100" title="Edit Campaign">
                             <Pencil size={18} />
                         </button>
-          
+                        <button onClick={(e) => handleDeleteCampaign(e, campaign.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors md:opacity-0 group-hover:opacity-100" title="Delete Campaign">
+                            <Trash2 size={18} />
+                        </button>
                         {expandedId === campaign.id ? <ChevronUp className="text-slate-400" /> : <ChevronDown className="text-slate-400" />}
                    </div>
                 </div>
@@ -540,10 +478,7 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                     <div className="md:w-2/3">
                       <div className="flex justify-between items-center mb-3">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Marketing Plans</h4>
-                        <button 
-                          onClick={() => openNewPlanModal(campaign.id)}
-                          className="text-xs flex items-center gap-1 bg-white border border-slate-300 px-2 py-1 rounded hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 transition-all"
-                        >
+                        <button onClick={() => openNewPlanModal(campaign.id)} className="text-xs flex items-center gap-1 bg-white border border-slate-300 px-2 py-1 rounded hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 transition-all">
                           <Plus size={12} /> Add Plan
                         </button>
                       </div>
@@ -551,7 +486,11 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                       {campaign.plans && campaign.plans.length > 0 ? (
                         <div className="grid grid-cols-1 gap-3">
                           {campaign.plans.map(plan => (
-                            <div key={plan.id} className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:shadow-sm transition-shadow">
+                            <div 
+                                key={plan.id} 
+                                onClick={() => setViewPlan({ plan, campaignName: campaign.name })}
+                                className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer group"
+                            >
                                  <div className="flex items-center gap-3">
                                   <div className="flex -space-x-1">
                                     {plan.platform.map((plat, idx) => (
@@ -561,7 +500,7 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                                       ))}
                                   </div>
                                   <div>
-                                     <p className="text-sm font-semibold text-slate-800">{plan.title}</p>
+                                     <p className="text-sm font-semibold text-slate-800 group-hover:text-emerald-600 transition-colors">{plan.title}</p>
                                      <p className="text-xs text-slate-500">{plan.scheduledDate}</p>
                                   </div>
                                </div>
@@ -582,17 +521,24 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                                                 plan.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200' :
                                                 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
                                             }`}
-                                            title="Click to cycle status"
                                         >
                                             {plan.status}
                                         </button>
                                    </div>
-                                   <button 
-                                     onClick={() => openEditPlanModal(campaign.id, plan)}
-                                     className="text-slate-300 hover:text-blue-500 p-1"
-                                   >
-                                     <Pencil size={14} />
-                                   </button>
+                                   <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                       <button 
+                                         onClick={(e) => openEditPlanModal(e, campaign.id, plan)}
+                                         className="text-slate-300 hover:text-blue-500 p-2 hover:bg-blue-50 rounded-full"
+                                       >
+                                         <Pencil size={14} />
+                                       </button>
+                                       <button 
+                                         onClick={(e) => handleDeletePlan(e, campaign.id, plan.id)}
+                                         className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-full"
+                                       >
+                                         <Trash2 size={14} />
+                                       </button>
+                                   </div>
                                </div>
                             </div>
                           ))}
@@ -617,6 +563,58 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
         )}
       </div>
 
+      {/* Plan Details View Modal (New Feature) */}
+      {viewPlan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setViewPlan(null)}>
+           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn" onClick={e => e.stopPropagation()}>
+               <div className="bg-slate-900 px-6 py-4 flex justify-between items-start">
+                   <div>
+                       <h3 className="text-lg font-bold text-white">{viewPlan.plan.title}</h3>
+                       <p className="text-slate-400 text-xs mt-1">Campaign: {viewPlan.campaignName}</p>
+                   </div>
+                   <button onClick={() => setViewPlan(null)} className="text-slate-400 hover:text-white"><X size={20}/></button>
+               </div>
+               <div className="p-6 space-y-6">
+                   <div>
+                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description / Notes</h4>
+                       <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-slate-700 text-sm whitespace-pre-wrap">
+                           {viewPlan.plan.description || <span className="italic text-slate-400">No description provided.</span>}
+                       </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-4">
+                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                           <span className="block text-xs text-slate-500 uppercase mb-1">Budget</span>
+                           <span className="text-lg font-bold text-slate-800">RM {viewPlan.plan.budget.toLocaleString()}</span>
+                       </div>
+                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                           <span className="block text-xs text-slate-500 uppercase mb-1">Actual Cost</span>
+                           <span className="text-lg font-bold text-slate-800">RM {viewPlan.plan.cost.toLocaleString()}</span>
+                       </div>
+                   </div>
+
+                   <div className="flex justify-between items-center border-t border-slate-100 pt-4">
+                       <div className="flex gap-2">
+                           {viewPlan.plan.platform.map(p => (
+                               <span key={p} className="text-xs px-2 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-600 font-medium">
+                                   {p}
+                               </span>
+                           ))}
+                       </div>
+                       <div className={`text-xs px-2 py-1 rounded-full border font-bold uppercase ${
+                           viewPlan.plan.status === 'Published' ? 'bg-green-50 text-green-700 border-green-200' :
+                           viewPlan.plan.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                           viewPlan.plan.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                           'bg-slate-50 text-slate-600 border-slate-200'
+                       }`}>
+                           {viewPlan.plan.status}
+                       </div>
+                   </div>
+               </div>
+           </div>
+        </div>
+      )}
+
       {/* Campaign Modal (New & Edit) */}
       {showCampModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -632,7 +630,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Name</label>
                   <input type="text" required value={campName} onChange={e => setCampName(e.target.value)} className={inputClass} placeholder="Summer Promo" />
                 </div>
-                
                 <div>
                    <label className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
                    <select required value={campBranch} onChange={e => setCampBranch(e.target.value)} className={inputClass}>
@@ -640,7 +637,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                    </select>
                 </div>
-
                 <div>
                    <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                    <select value={campCategory} onChange={e => setCampCategory(e.target.value)} className={inputClass}>
@@ -648,7 +644,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                    </select>
                 </div>
-
                 <div>
                    <label className="block text-sm font-medium text-slate-700 mb-1">Event Type</label>
                    <select value={campEvent} onChange={e => setCampEvent(e.target.value)} className={inputClass}>
@@ -656,8 +651,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                      {eventTypes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                    </select>
                 </div>
-
-                {/* Financials Row */}
                 <div className="col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Target Revenue (RM)</label>
@@ -668,29 +661,24 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                         <input type="number" value={campActualRev} onChange={e => setCampActualRev(e.target.value)} className={`${inputClass} border-emerald-200`} placeholder="0.00" />
                     </div>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
                   <input type="date" required value={campStart} onChange={e => setCampStart(e.target.value)} className={inputClass} />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
                   <input type="date" required value={campEnd} onChange={e => setCampEnd(e.target.value)} className={inputClass} />
                 </div>
-                
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                   <textarea rows={2} value={campDesc} onChange={e => setCampDesc(e.target.value)} className={inputClass} placeholder="Describe the campaign..." />
                 </div>
-
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Upload Poster (Image)</label>
                   <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
                   {campImage && <div className="mt-2 text-xs text-green-600 flex items-center gap-1"><CheckSquare size={12}/> Image loaded</div>}
                 </div>
               </div>
-
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <button type="button" onClick={() => setShowCampModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
                 <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">{isEditCamp ? 'Save Changes' : 'Create Campaign'}</button>
@@ -714,60 +702,31 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Plan Title</label>
                   <input type="text" required value={planTitle} onChange={e => setPlanTitle(e.target.value)} className={inputClass} placeholder="e.g. Teaser Post" />
                 </div>
-                
-                {/* Multi-Platform Select */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Platforms</label>
                   <div className="flex flex-wrap gap-2 mb-2">
                       {COMMON_PLATFORMS.map(p => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => togglePlatform(p)}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                                planPlatforms.includes(p) 
-                                ? 'bg-emerald-600 text-white border-emerald-600' 
-                                : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400'
-                                 }`}
-                          >
+                          <button key={p} type="button" onClick={() => togglePlatform(p)} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${planPlatforms.includes(p) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400'}`}>
                               {p}
                           </button>
                       ))}
                   </div>
-                  {/* Custom Platform */}
                   <div className="flex gap-2">
-                     <input 
-                        type="text" 
-                        value={planCustomPlatform} 
-                        onChange={e => setPlanCustomPlatform(e.target.value)} 
-                        placeholder="Add other..." 
-                        className="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg bg-white text-slate-900"
-                      />
-                      <button 
-                        type="button" 
-                        onClick={addCustomPlatform}
-                        className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
-                      >
-                          Add
-                      </button>
+                     <input type="text" value={planCustomPlatform} onChange={e => setPlanCustomPlatform(e.target.value)} placeholder="Add other..." className="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg bg-white text-slate-900" />
+                      <button type="button" onClick={addCustomPlatform} className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Add</button>
                   </div>
-                  {/* Selected Chips */}
                   {planPlatforms.length > 0 && (
                        <div className="mt-3 flex flex-wrap gap-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
                           {planPlatforms.map(p => (
-                              <span key={p} className="text-xs flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded text-slate-700">
-                                   {p} <X size={10} className="cursor-pointer hover:text-red-500" onClick={() => togglePlatform(p)}/>
-                              </span>
+                              <span key={p} className="text-xs flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded text-slate-700">{p} <X size={10} className="cursor-pointer hover:text-red-500" onClick={() => togglePlatform(p)}/></span>
                           ))}
                        </div>
                   )}
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Scheduled Date</label>
                   <input type="date" required value={planDate} onChange={e => setPlanDate(e.target.value)} className={inputClass} />
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Budget (RM)</label>
@@ -778,19 +737,10 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                         <input type="number" required value={planCost} onChange={e => setPlanCost(e.target.value)} className={inputClass} placeholder="0.00" />
                     </div>
                 </div>
-
-                {/* Description Input */}
                 <div>
                    <label className="block text-sm font-medium text-slate-700 mb-1">Description / Notes</label>
-                   <textarea 
-                     rows={3} 
-                     value={planDesc} 
-                     onChange={e => setPlanDesc(e.target.value)} 
-                     className={inputClass} 
-                     placeholder="Add details, caption ideas, or notes..." 
-                   />
+                   <textarea rows={3} value={planDesc} onChange={e => setPlanDesc(e.target.value)} className={inputClass} placeholder="Add details, caption ideas, or notes..." />
                 </div>
-
                 {isEditPlan && (
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
@@ -802,7 +752,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ initialExpandedId }) => {
                         </select>
                     </div>
                 )}
-
                 <div className="flex justify-end gap-2 mt-6 pt-2 border-t">
                    <button type="button" onClick={() => setShowPlanModal(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg">Cancel</button>
                    <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">{isEditPlan ? 'Save Changes' : 'Add Plan'}</button>

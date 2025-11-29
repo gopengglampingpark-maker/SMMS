@@ -7,12 +7,9 @@ import { User, Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventT
 
 // --- Safe Env Access (Vite Compatible) ---
 const getEnv = (key: string) => {
-  // Check for Vite environment variables
-  // FIX: Cast to 'any' to avoid TS2339 error
   if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
     return (import.meta as any).env[key];
   }
-  // Fallback for other environments
   try {
     // @ts-ignore
     return (typeof process !== 'undefined' && process.env) ? process.env[key] : undefined;
@@ -22,7 +19,6 @@ const getEnv = (key: string) => {
 };
 
 // --- Configuration ---
-// Updated with your provided credentials
 const firebaseConfig = {
   apiKey: getEnv('VITE_API_KEY') || "AIzaSyCddm09CHHiiV-246mNmJJpapwcEt2LISc",
   authDomain: "smms-3188e.firebaseapp.com",
@@ -32,10 +28,8 @@ const firebaseConfig = {
   appId: "1:466656264824:web:13744546d3a3180728638d"
 };
 
-// Logic: Use Mock Mode ONLY if explicitly set in environment, otherwise default to Real Firebase
 const FORCE_MOCK = getEnv('VITE_USE_MOCK') === 'true';
 
-// Initialize Firebase
 let app, db: any;
 let IS_DEMO = false;
 
@@ -52,7 +46,6 @@ if (FORCE_MOCK) {
   }
 }
 
-// Collection Names
 const COLLECTIONS = {
   USERS: 'users',
   CAMPAIGNS: 'campaigns',
@@ -61,7 +54,7 @@ const COLLECTIONS = {
   EVENT_TYPES: 'event_types',
 };
 
-// --- Mock Data Helpers (LocalStorage) ---
+// --- Mock Data Helpers ---
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const getMockData = <T>(key: string): T[] => {
@@ -69,7 +62,6 @@ const getMockData = <T>(key: string): T[] => {
     const data = localStorage.getItem(`mock_${key}`);
     return data ? JSON.parse(data) : [];
   } catch (e) {
-    console.error(`Error parsing mock data for ${key}`, e);
     return [];
   }
 };
@@ -82,7 +74,7 @@ const setMockData = (key: string, data: any[]) => {
   }
 };
 
-// --- Seed Data (Used for both Mock and Initial Firebase Seeding) ---
+// --- Seed Data ---
 const getCurrentYear = () => new Date().getFullYear();
 const Y = getCurrentYear();
 
@@ -151,7 +143,6 @@ const SEED_CAMPAIGNS: Campaign[] = [
 // --- Initialization ---
 export const initDatabase = async () => {
   if (IS_DEMO) {
-    console.warn("RUNNING IN MOCK MODE: Using LocalStorage simulation.");
     await delay(500);
     if (getMockData(COLLECTIONS.USERS).length === 0) setMockData(COLLECTIONS.USERS, SEED_USERS);
     if (getMockData(COLLECTIONS.BRANCHES).length === 0) setMockData(COLLECTIONS.BRANCHES, SEED_BRANCHES);
@@ -168,39 +159,26 @@ export const initDatabase = async () => {
       return snapshot.empty;
     };
 
-    // Auto-seed Users if empty
     if (await isCollectionEmpty(COLLECTIONS.USERS)) {
-       console.log("Seeding Users...");
        for (const u of SEED_USERS) { const {id, ...data} = u; await addDoc(collection(db, COLLECTIONS.USERS), data); }
     }
-    // Auto-seed Branches if empty
     if (await isCollectionEmpty(COLLECTIONS.BRANCHES)) {
-       console.log("Seeding Branches...");
        for (const b of SEED_BRANCHES) { const {id, ...data} = b; await addDoc(collection(db, COLLECTIONS.BRANCHES), data); }
     }
-     // Auto-seed Categories if empty
     if (await isCollectionEmpty(COLLECTIONS.CATEGORIES)) {
-       console.log("Seeding Categories...");
        for (const c of SEED_CATEGORIES) { const {id, ...data} = c; await addDoc(collection(db, COLLECTIONS.CATEGORIES), data); }
     }
-    // Auto-seed Event Types if empty
     if (await isCollectionEmpty(COLLECTIONS.EVENT_TYPES)) {
-       console.log("Seeding Event Types...");
        for (const e of SEED_EVENT_TYPES) { const {id, ...data} = e; await addDoc(collection(db, COLLECTIONS.EVENT_TYPES), data); }
     }
-     // Auto-seed Campaigns if empty
     if (await isCollectionEmpty(COLLECTIONS.CAMPAIGNS)) {
-       console.log("Seeding Campaigns...");
        for (const c of SEED_CAMPAIGNS) { const {id, ...data} = c; await addDoc(collection(db, COLLECTIONS.CAMPAIGNS), data); }
     }
-
-    console.log('Firebase Database initialized & seeded if empty.');
   } catch (e) {
     console.error("Error seeding database:", e);
   }
 };
 
-// --- Helper to snapshot to array ---
 const snapToData = <T>(snap: any): T[] => {
     return snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as T[];
 };
@@ -411,6 +389,17 @@ export const updateCampaign = async (campaign: Campaign): Promise<void> => {
   await updateDoc(docRef, data as any);
 };
 
+// NEW FUNCTION: Added to support deleting campaigns
+export const deleteCampaign = async (id: string): Promise<void> => {
+  if (IS_DEMO) {
+    await delay(300);
+    const list = getMockData<Campaign>(COLLECTIONS.CAMPAIGNS);
+    setMockData(COLLECTIONS.CAMPAIGNS, list.filter(c => c.id !== id));
+    return;
+  }
+  await deleteDoc(doc(db, COLLECTIONS.CAMPAIGNS, id));
+};
+
 export const updateCampaignStatus = async (campaignId: string, status: CampaignStatus): Promise<void> => {
   if (IS_DEMO) {
     await delay(200);
@@ -426,7 +415,7 @@ export const updateCampaignStatus = async (campaignId: string, status: CampaignS
   await updateDoc(docRef, { status });
 };
 
-// --- Marketing Plans (Sub-items management) ---
+// --- Marketing Plans ---
 
 export const addMarketingPlan = async (campaignId: string, plan: MarketingPlan): Promise<void> => {
   if (IS_DEMO) {
@@ -509,7 +498,6 @@ export const authenticate = async (username: string, password: string): Promise<
     }
   } catch (e) {
       console.error("Auth error:", e);
-      // Fallback for first login if DB is empty
       if (username === 'admin' && password === '123') {
           return SEED_USERS[0];
       }
