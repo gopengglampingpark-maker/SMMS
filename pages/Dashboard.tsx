@@ -7,7 +7,18 @@ import { DollarSign, Wallet, Megaphone, CheckSquare, ChevronDown, X, ArrowRight,
 import { getCampaigns, getBranches } from '../services/storage';
 import { Branch, MarketingPlan, Campaign, KPI } from '../types';
 
-import { isWithinInterval, parseISO, startOfYear, endOfYear, format, startOfDay, endOfDay, isValid, startOfMonth, endOfMonth } from 'date-fns';
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfYear, 
+  endOfYear, 
+  startOfDay, 
+  endOfDay, 
+  isWithinInterval, 
+  isValid, 
+  parseISO 
+} from 'date-fns';
 
 interface DashboardProps {
   onNavigate: (view: string, data?: any) => void;

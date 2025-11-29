@@ -5,7 +5,15 @@ import {
 } from '../services/storage';
 import { Campaign, Branch, MarketingPlan, CampaignStatus, Category, EventType } from '../types';
 import { ChevronDown, ChevronUp, Calendar as CalIcon, Facebook, Instagram, Mail, Video, Globe, Image as ImageIcon, Plus, X, Pencil, Trash, Tag, CheckSquare, CalendarDays, Filter } from 'lucide-react';
-import { parseISO, isValid, startOfYear, endOfYear, startOfMonth, endOfMonth } from 'date-fns';
+
+import { 
+  parseISO, 
+  isValid, 
+  startOfYear, 
+  endOfYear, 
+  startOfMonth, 
+  endOfMonth 
+} from 'date-fns';
 
 interface CampaignsProps {
   initialExpandedId?: string;
